@@ -151,6 +151,22 @@ body {
   animation: hugo-rise 0.5s cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
+/*
+ * Ambient-field CSS fallback drift — used by HugoAmbientField when WebGPU is
+ * unavailable. A slow, barely-there breathing/scale so the orb's atmosphere
+ * still feels alive without a GPU. Disabled by the reduced-motion rule below.
+ */
+@keyframes hugo-field-drift {
+  0%, 100% { transform: scale(1); opacity: 0.85; }
+  50% { transform: scale(1.06); opacity: 1; }
+}
+
+.hugo-field-drift {
+  animation: hugo-field-drift 9s ease-in-out infinite;
+  transform-origin: 50% 46%;
+  will-change: transform, opacity;
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,
