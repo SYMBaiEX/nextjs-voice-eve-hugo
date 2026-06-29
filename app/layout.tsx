@@ -4,7 +4,7 @@ import "./globals.css";
 import { ConvexAuthNextjsServerProvider } from "@convex-dev/auth/nextjs/server";
 import { ConvexClientProvider } from "@/components/providers/ConvexClientProvider";
 import { ThemeProvider } from "@/components/providers/ThemeProvider";
-import { Toaster } from "sonner";
+import { AppToaster } from "@/components/providers/AppToaster";
 import { APP_NAME, APP_TAGLINE } from "@/lib/constants";
 
 const geistSans = Geist({
@@ -43,17 +43,7 @@ export default function RootLayout({
           <ThemeProvider>
             <ConvexClientProvider>
               {children}
-              <Toaster
-                theme="dark"
-                position="bottom-right"
-                toastOptions={{
-                  style: {
-                    background: "var(--surface-elevated)",
-                    border: "1px solid var(--border)",
-                    color: "var(--text-primary)",
-                  },
-                }}
-              />
+              <AppToaster />
             </ConvexClientProvider>
           </ThemeProvider>
         </body>

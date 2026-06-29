@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Authenticated, Unauthenticated, useQuery } from "convex/react";
+import { Authenticated, Unauthenticated, AuthLoading, useQuery } from "convex/react";
 import { useAuthActions } from "@convex-dev/auth/react";
 import {
   LogOut,
@@ -189,6 +189,16 @@ export function TopNav() {
         <Logo />
         <nav className="flex items-center gap-2" aria-label="Account and theme">
           <ThemeToggle />
+          {/* AuthLoading reserves the account-control slot so the nav row width
+              stays stable across the Convex auth handshake (no CLS). It renders
+              on the server and the first client paint — matching markup — then
+              resolves to the real control. */}
+          <AuthLoading>
+            <div
+              aria-hidden
+              className="size-9 animate-pulse rounded-full border border-border bg-surface-elevated/60"
+            />
+          </AuthLoading>
           <Authenticated>
             <UserMenu />
           </Authenticated>

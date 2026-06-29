@@ -3,16 +3,10 @@
 import { useEffect, useRef } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import {
-  Authenticated,
-  Unauthenticated,
-  AuthLoading,
-  useConvexAuth,
-  useQuery,
-} from "convex/react";
+import { useConvexAuth, useQuery } from "convex/react";
 import { ArrowRight, Lock, MessageSquareText, Mic } from "lucide-react";
 import { createScope, createTimeline, stagger, utils, type Scope } from "animejs";
-import { HugoOrb } from "@/components/hugo/HugoOrb";
+import { HugoOrbStage } from "@/components/hugo/HugoOrbStage";
 import { buttonVariants } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
@@ -108,21 +102,34 @@ function HeadlineWords() {
   );
 }
 
-export function Hero() {
+export function Hero({
+  initialAuthed = false,
+  guestPreviewEnabled = false,
+}: {
+  /** Auth resolved on the server (app/page.tsx) so first paint is correct. */
+  initialAuthed?: boolean;
+  /** Public guest-preview setting resolved on the server. */
+  guestPreviewEnabled?: boolean;
+}) {
   // Guest preview is a runtime admin setting (read via the public settings
   // query), NOT a build-time env var — so toggling it in /admin/settings takes
-  // effect without a redeploy.
+  // effect without a redeploy. The server-resolved prop is the first-paint value
+  // (no flash); the live query takes over once it loads.
   const settings = useQuery(api.settings.getPublic, {});
-  const guestPreview = settings?.guestPreviewEnabled === true;
+  const guestPreview =
+    settings === undefined ? guestPreviewEnabled : settings?.guestPreviewEnabled === true;
   const guestHref = guestPreview ? "/chat" : "/sign-in?next=/chat";
 
-  // Resolve auth as VALUES (not <Authenticated> wrappers) for the orb, so the
-  // orb stays mounted across the auth-loading→resolved transition. Remounting
-  // an SVG-motion-path orb mid-animation throws getPointAtLength "inactive
-  // document" errors, so a single stable instance is required here.
+  // Resolve auth as VALUES (not <Authenticated> wrappers) so the orb and CTAs
+  // stay stable across the auth-loading→resolved transition. During the loading
+  // window we use the SERVER-resolved value (initialAuthed), so server HTML and
+  // the first client paint agree — no CTA flash, no hydration mismatch. (Keeping
+  // the orb a single mounted instance also avoids the getPointAtLength
+  // "inactive document" remount error.)
   const router = useRouter();
   const { isLoading, isAuthenticated } = useConvexAuth();
-  const orbHref = isAuthenticated ? "/chat" : guestHref;
+  const authed = isLoading ? initialAuthed : isAuthenticated;
+  const orbHref = authed ? "/chat" : guestHref;
 
   const rootRef = useRef<HTMLElement>(null);
   const scopeRef = useRef<Scope | null>(null);
@@ -206,8 +213,8 @@ export function Hero() {
       {/* Orb — a single stable instance; state + destination derive from auth
           values so it never remounts (see note above). */}
       <div data-hero-orb data-hero-reveal style={hidden}>
-        <HugoOrb
-          state={isLoading ? "connecting" : "idle"}
+        <HugoOrbStage
+          state="idle"
           size={280}
           onClick={() => router.push(orbHref)}
           className="drop-shadow-[0_0_80px_var(--glow)]"
@@ -241,21 +248,19 @@ export function Hero() {
         </div>
       </div>
 
-      {/* CTAs — auth-gated */}
+      {/* CTAs — auth-gated. `authed` derives from the server-resolved value
+          during the loading window, so this renders the correct destination on
+          first paint (no flash) and stays hydration-stable. */}
       <div data-hero-cta data-hero-reveal style={hidden}>
-        <Authenticated>
+        {authed ? (
           <CtaRow talkHref="/chat" textHref="/chat" showSignInHint={false} />
-        </Authenticated>
-        <Unauthenticated>
+        ) : (
           <CtaRow
             talkHref={guestHref}
             textHref={guestHref}
             showSignInHint={!guestPreview}
           />
-        </Unauthenticated>
-        <AuthLoading>
-          <CtaRow talkHref="/chat" textHref="/chat" showSignInHint={false} />
-        </AuthLoading>
+        )}
       </div>
     </section>
   );

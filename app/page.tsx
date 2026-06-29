@@ -1,3 +1,6 @@
+import { convexAuthNextjsToken } from "@convex-dev/auth/nextjs/server";
+import { fetchQuery } from "convex/nextjs";
+import { api } from "@/convex/_generated/api";
 import { TopNav } from "@/components/layout/TopNav";
 import { Footer } from "@/components/layout/Footer";
 import { Hero } from "@/components/landing/Hero";
@@ -27,7 +30,21 @@ const TECH_STACK = [
   "Convex",
 ];
 
-export default function LandingPage() {
+export default async function LandingPage() {
+  // Resolve auth + the public guest-preview setting on the SERVER so the Hero's
+  // CTAs render their correct destination on first paint instead of flashing
+  // through the Convex auth-loading window on the client. Both are best-effort:
+  // a failure degrades to the unauthenticated/guarded defaults, never an error.
+  const token = await convexAuthNextjsToken().catch(() => undefined);
+  const [me, settings] = await Promise.all([
+    token
+      ? fetchQuery(api.users.currentUser, {}, { token }).catch(() => null)
+      : Promise.resolve(null),
+    fetchQuery(api.settings.getPublic, {}).catch(() => null),
+  ]);
+  const initialAuthed = me != null;
+  const guestPreviewEnabled = settings?.guestPreviewEnabled === true;
+
   return (
     <div className="relative flex min-h-dvh flex-col overflow-x-hidden">
       {/* Ambient backdrop — fixed so it never scrolls away */}
@@ -54,7 +71,10 @@ export default function LandingPage() {
         {/* Hero — above the fold, viewport-first */}
         <section className="relative flex min-h-[88vh] items-center justify-center px-6 pb-20 pt-28">
           <div className="w-full max-w-5xl">
-            <Hero />
+            <Hero
+              initialAuthed={initialAuthed}
+              guestPreviewEnabled={guestPreviewEnabled}
+            />
           </div>
         </section>
 
