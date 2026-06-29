@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import {
   animate,
   createScope,
@@ -55,6 +55,23 @@ const STATE_STYLE: Record<HugoOrbState, StateStyle> = {
 };
 
 const AUDIO_STATES = new Set<HugoOrbState>(["listening", "speaking"]);
+
+/**
+ * Effects that build/tear down anime.js geometry must run in the LAYOUT phase,
+ * not the passive phase. Reverting a motion-path or drawable animation re-reads
+ * SVG geometry (getPointAtLength/getTotalLength) to restore initial values, and
+ * the browser throws InvalidStateError ("inactive document") when that read
+ * happens on a disconnected element. React runs passive (useEffect) cleanups
+ * *after* it detaches the unmounted subtree from the DOM — so a useEffect-based
+ * teardown races detachment and intermittently reads detached geometry. Layout
+ * (useLayoutEffect) cleanups run *synchronously before* React removes the host
+ * nodes, so revert always reads geometry while the SVG is still connected.
+ *
+ * useLayoutEffect warns under SSR, so fall back to useEffect on the server (the
+ * effect bodies no-op there anyway — they bail when the DOM ref is null).
+ */
+const useIsomorphicLayoutEffect =
+  typeof window !== "undefined" ? useLayoutEffect : useEffect;
 
 /** Geometry helpers on the 0..400 viewBox (center 200,200). */
 const C = 200;
@@ -133,8 +150,10 @@ export function HugoOrb({
   const [motionEpoch, setMotionEpoch] = useState(0);
 
   // ── One-time scene setup: build every layer's idle/loop motion inside a scope.
-  // The per-state controller (below) layers transitions on top of this.
-  useEffect(() => {
+  // The per-state controller (below) layers transitions on top of this. Runs in
+  // the layout phase so the teardown's scope.revert() reads SVG geometry while
+  // the orb is still connected (see useIsomorphicLayoutEffect note above).
+  useIsomorphicLayoutEffect(() => {
     const root = rootRef.current;
     if (!root) return;
 
@@ -240,6 +259,8 @@ export function HugoOrb({
 
     return () => {
       mq.removeEventListener("change", onMq);
+      // Layout-phase cleanup: the orb is still connected here, so reverting the
+      // scope's motion-path/drawable animations can safely read SVG geometry.
       scopeRef.current?.revert();
       scopeRef.current = null;
       coreAnimRef.current = null;
@@ -250,7 +271,9 @@ export function HugoOrb({
 
   // ── Per-STATE controller. On each state change, smoothly transition the orb's
   // motion to that state. Stored handles are reverted before the next state runs.
-  useEffect(() => {
+  // Layout phase too: the cleanup reverts morphTo/drawable tweens that read SVG
+  // geometry, so it must run before React detaches the orb on unmount.
+  useIsomorphicLayoutEffect(() => {
     const root = rootRef.current;
     if (!root) return;
 
