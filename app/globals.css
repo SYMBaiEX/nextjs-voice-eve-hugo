@@ -1,26 +1,162 @@
 @import "tailwindcss";
 
+/*
+ * Hugo design system — dark-first, Vercel/Bklit-inspired command surface.
+ * Premium monochrome base with controlled cyan / blue-white / magenta accents.
+ */
+
+@custom-variant dark (&:where(.dark, .dark *));
+
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  /* Light mode (supported, secondary). */
+  --background: #fafafa;
+  --surface: #ffffff;
+  --surface-elevated: #ffffff;
+  --border: rgba(0, 0, 0, 0.08);
+  --border-strong: rgba(0, 0, 0, 0.14);
+  --text-primary: #0a0a0a;
+  --text-secondary: #52525b;
+  --text-muted: #a1a1aa;
+
+  --hugo-cyan: #0891b2;
+  --hugo-blue: #2563eb;
+  --accent-magenta: #db2777;
+  --warning: #ca8a04;
+  --error: #e11d48;
+  --success: #059669;
+
+  --grid-line: rgba(0, 0, 0, 0.035);
+  --glow: rgba(8, 145, 178, 0.18);
+
+  --radius: 0.75rem;
+}
+
+.dark {
+  /* Dark mode (default). */
+  --background: #050505;
+  --surface: #0a0a0a;
+  --surface-elevated: #111111;
+  --border: rgba(255, 255, 255, 0.1);
+  --border-strong: rgba(255, 255, 255, 0.16);
+  --text-primary: #f8fafc;
+  --text-secondary: #a1a1aa;
+  --text-muted: #6b6b74;
+
+  --hugo-cyan: #67e8f9;
+  --hugo-blue: #38bdf8;
+  --accent-magenta: #f472b6;
+  --warning: #facc15;
+  --error: #fb7185;
+  --success: #34d399;
+
+  --grid-line: rgba(255, 255, 255, 0.04);
+  --glow: rgba(103, 232, 249, 0.22);
 }
 
 @theme inline {
   --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --color-surface: var(--surface);
+  --color-surface-elevated: var(--surface-elevated);
+  --color-border: var(--border);
+  --color-border-strong: var(--border-strong);
+  --color-foreground: var(--text-primary);
+  --color-text-primary: var(--text-primary);
+  --color-text-secondary: var(--text-secondary);
+  --color-text-muted: var(--text-muted);
+
+  --color-hugo-cyan: var(--hugo-cyan);
+  --color-hugo-blue: var(--hugo-blue);
+  --color-accent-magenta: var(--accent-magenta);
+  --color-warning: var(--warning);
+  --color-error: var(--error);
+  --color-success: var(--success);
+
+  --radius-lg: var(--radius);
+  --radius-md: calc(var(--radius) - 0.25rem);
+  --radius-sm: calc(var(--radius) - 0.375rem);
+
+  --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-geist-mono), ui-monospace, "SF Mono", monospace;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+* {
+  border-color: var(--border);
+}
+
+html {
+  color-scheme: dark;
+}
+
+html:not(.dark) {
+  color-scheme: light;
 }
 
 body {
   background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  color: var(--text-primary);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+/* Ambient command-surface grid background. */
+.bg-grid {
+  background-image:
+    linear-gradient(to right, var(--grid-line) 1px, transparent 1px),
+    linear-gradient(to bottom, var(--grid-line) 1px, transparent 1px);
+  background-size: 56px 56px;
+}
+
+.bg-grid-fade {
+  -webkit-mask-image: radial-gradient(ellipse 80% 60% at 50% 40%, black 30%, transparent 100%);
+  mask-image: radial-gradient(ellipse 80% 60% at 50% 40%, black 30%, transparent 100%);
+}
+
+/* Subtle glass panel used across dashboards and panels. */
+.panel {
+  background: color-mix(in oklab, var(--surface) 92%, transparent);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  backdrop-filter: blur(12px);
+}
+
+.text-glow {
+  text-shadow: 0 0 24px var(--glow);
+}
+
+/* Thin custom scrollbars for the console aesthetic. */
+.scroll-thin::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+.scroll-thin::-webkit-scrollbar-thumb {
+  background: var(--border-strong);
+  border-radius: 999px;
+}
+.scroll-thin::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+/*
+ * Entrance animation for staggered surface reveals. The Hugo orb's own motion
+ * is now fully driven by Anime.js (see components/hugo/HugoOrb.tsx), so the old
+ * orb @keyframes (breathe/spin/ripple/pulse) have been removed.
+ */
+@keyframes hugo-rise {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.animate-rise {
+  animation: hugo-rise 0.5s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
 }

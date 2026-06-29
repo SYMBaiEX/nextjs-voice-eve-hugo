@@ -1,0 +1,16 @@
+# Never upload local env files or secrets to the Vercel build — Vercel injects
+# the project's configured env vars. Shipping .env.local would leak the AI
+# Gateway key / OIDC token and could point the build at the dev Convex.
+.env
+.env.*
+!.env.example
+
+# Local-only state + tooling
+.convex
+.claude
+.git
+node_modules
+.next
+
+# Scratch / docs not needed at runtime
+*.log

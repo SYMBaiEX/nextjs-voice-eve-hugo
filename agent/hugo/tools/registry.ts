@@ -1,0 +1,99 @@
+/**
+ * Hugo tool registry — single source of truth for tool metadata (PRD 5.10).
+ *
+ * Both the server-side tool implementations (tools/index.ts) and the
+ * client-safe voice tool list (returned by /api/realtime/token) derive from
+ * this registry, so names, descriptions, and approval policy never drift.
+ */
+
+import type { ClientSafeToolDefinition } from "@/lib/types";
+
+export type ToolScope = "user" | "admin";
+
+export interface ToolMeta {
+  name: string;
+  description: string;
+  scope: ToolScope;
+  /** Read-only tools auto-approve; mutating self-scoped tools also auto-approve. */
+  readOnly: boolean;
+  /** True when the tool needs explicit approval before executing. */
+  requiresApproval: boolean;
+}
+
+export const USER_TOOLS: ToolMeta[] = [
+  {
+    name: "getCurrentUserProfile",
+    description:
+      "Get the signed-in user's profile and preferences (name, role, voice, theme).",
+    scope: "user",
+    readOnly: true,
+    requiresApproval: false,
+  },
+  {
+    name: "getRecentConversationContext",
+    description:
+      "Recall a short summary of the user's most recent conversations to ground the reply.",
+    scope: "user",
+    readOnly: true,
+    requiresApproval: false,
+  },
+  {
+    name: "saveUserPreference",
+    description:
+      "Save a durable user preference or fact to memory, keyed by a short stable key.",
+    scope: "user",
+    readOnly: false,
+    requiresApproval: false,
+  },
+  {
+    name: "createConversationSummary",
+    description:
+      "Summarize the current conversation and store the summary for later retrieval.",
+    scope: "user",
+    readOnly: false,
+    requiresApproval: false,
+  },
+  {
+    name: "searchUserConversations",
+    description: "Search the user's own conversation history by keyword.",
+    scope: "user",
+    readOnly: true,
+    requiresApproval: false,
+  },
+];
+
+export const ADMIN_TOOLS: ToolMeta[] = [
+  {
+    name: "getSystemUsageSummary",
+    description: "Global usage, spend, and model rollup (admin only).",
+    scope: "admin",
+    readOnly: true,
+    requiresApproval: false,
+  },
+  {
+    name: "getUserUsageSummary",
+    description: "Usage summary for a specific user (admin only).",
+    scope: "admin",
+    readOnly: true,
+    requiresApproval: false,
+  },
+  {
+    name: "disableUser",
+    description: "Disable a user account (admin only, destructive).",
+    scope: "admin",
+    readOnly: false,
+    requiresApproval: true,
+  },
+];
+
+export const ALL_TOOLS = [...USER_TOOLS, ...ADMIN_TOOLS];
+
+/** Client-safe projection sent to the browser realtime session (no execute fns). */
+export function clientSafeTools(scope: ToolScope = "user"): ClientSafeToolDefinition[] {
+  const source = scope === "admin" ? ALL_TOOLS : USER_TOOLS;
+  return source.map((t) => ({
+    name: t.name,
+    description: t.description,
+    requiresApproval: t.requiresApproval,
+  }));
+}

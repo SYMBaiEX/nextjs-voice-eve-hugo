@@ -1,65 +1,112 @@
-import Image from "next/image";
+import { TopNav } from "@/components/layout/TopNav";
+import { Footer } from "@/components/layout/Footer";
+import { Hero } from "@/components/landing/Hero";
+import { FeatureGrid } from "@/components/landing/FeatureGrid";
 
-export default function Home() {
+/**
+ * Landing / marketing page (PRD 5.2) — the primary showcase surface.
+ *
+ * Server component by design: the only interactive bits (orb navigation,
+ * auth-gated CTAs) live in <Hero>, a small client child. Everything else —
+ * ambient background, chrome, feature grid, tech strip — renders on the server.
+ *
+ * Layout, top to bottom:
+ *   1. Fixed ambient grid + radial glow backdrop
+ *   2. TopNav
+ *   3. Hero (orb, headline, CTAs) — above the fold
+ *   4. "Command surface" feature grid
+ *   5. Tech strip
+ *   6. Footer
+ */
+
+const TECH_STACK = [
+  "Next.js 16",
+  "AI SDK 7",
+  "AI Gateway realtime voice",
+  "Eve",
+  "Convex",
+];
+
+export default function LandingPage() {
   return (
-    <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex flex-1 w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
+    <div className="relative flex min-h-dvh flex-col overflow-x-hidden">
+      {/* Ambient backdrop — fixed so it never scrolls away */}
+      <div aria-hidden="true" className="pointer-events-none fixed inset-0 -z-10">
+        <div className="absolute inset-0 bg-grid bg-grid-fade opacity-60" />
+        {/* Primary cyan glow behind the hero */}
+        <div
+          className="absolute left-1/2 top-[18%] h-[42rem] w-[42rem] -translate-x-1/2 rounded-full"
+          style={{
+            background:
+              "radial-gradient(circle, var(--glow), transparent 65%)",
+            filter: "blur(40px)",
+          }}
         />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the page.tsx file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
-        </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
-        </div>
+        {/* Cool secondary wash near the fold edge */}
+        <div className="absolute -bottom-32 left-1/2 h-[28rem] w-[80rem] -translate-x-1/2 rounded-full bg-hugo-blue/5 blur-3xl" />
+        {/* Top fade into the nav */}
+        <div className="absolute inset-x-0 top-0 h-32 bg-gradient-to-b from-background to-transparent" />
+      </div>
+
+      <TopNav />
+
+      <main className="flex flex-1 flex-col">
+        {/* Hero — above the fold, viewport-first */}
+        <section className="relative flex min-h-[88vh] items-center justify-center px-6 pb-20 pt-28">
+          <div className="w-full max-w-5xl">
+            <Hero />
+          </div>
+        </section>
+
+        {/* Command surface */}
+        <section className="relative px-6 pb-12">
+          <div className="mx-auto w-full max-w-6xl">
+            <div className="animate-rise mb-8 flex flex-col items-center gap-3 text-center">
+              <span className="font-mono text-xs tracking-widest text-hugo-cyan">
+                THE COMMAND SURFACE
+              </span>
+              <h2 className="text-balance text-2xl font-semibold tracking-tight text-text-primary sm:text-3xl">
+                One agent. Voice, text, memory, and oversight.
+              </h2>
+              <p className="max-w-2xl text-balance text-sm text-text-secondary">
+                Hugo runs as a single coherent system — every modality shares the
+                same context, and every session is observable.
+              </p>
+            </div>
+            <FeatureGrid />
+          </div>
+        </section>
+
+        {/* Tech strip */}
+        <section className="relative px-6 py-12">
+          <div className="mx-auto w-full max-w-4xl">
+            <div className="panel flex flex-col items-center gap-4 px-6 py-5 text-center">
+              <span className="font-mono text-[10px] tracking-[0.2em] text-text-muted">
+                POWERED BY
+              </span>
+              <ul className="flex flex-wrap items-center justify-center gap-x-2 gap-y-2">
+                {TECH_STACK.map((tech, i) => (
+                  <li key={tech} className="flex items-center gap-2">
+                    <span className="font-mono text-xs text-text-secondary sm:text-sm">
+                      {tech}
+                    </span>
+                    {i < TECH_STACK.length - 1 ? (
+                      <span
+                        aria-hidden="true"
+                        className="text-text-muted/50"
+                      >
+                        ·
+                      </span>
+                    ) : null}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          </div>
+        </section>
       </main>
+
+      <Footer />
     </div>
   );
 }

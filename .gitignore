@@ -30,11 +30,21 @@ yarn-debug.log*
 yarn-error.log*
 .pnpm-debug.log*
 
-# env files (can opt-in for committing if needed)
+# env files — ignore all real env files, but DO commit the documented template.
 .env*
+!.env.example
 
 # vercel
 .vercel
+
+# convex (local anonymous backend data + cache)
+.convex/
+
+# claude code / local tooling
+.claude/
+
+# bun lockfile (this project uses pnpm)
+bun.lock
 
 # typescript
 *.tsbuildinfo
