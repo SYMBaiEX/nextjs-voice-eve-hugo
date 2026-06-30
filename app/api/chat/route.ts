@@ -173,7 +173,10 @@ export async function POST(req: Request) {
   });
 
   const startedAt = Date.now();
-  const model = getTextModel(runtime?.defaultTextModel);
+  // Per-user model preference wins, then the admin/global default, then env.
+  const model = getTextModel(
+    me.preferences?.preferredTextModel ?? runtime?.defaultTextModel,
+  );
   const callSettings = getHugoTextCallSettings("chat");
 
   try {

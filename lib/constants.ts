@@ -13,6 +13,36 @@ export const APP_TAGLINE = "A realtime AI voice agent built on the Vercel AI sta
 export const APP_DESCRIPTION =
   "Speak naturally. Interrupt freely. Continue in chat. Everything syncs in real time.";
 
+/**
+ * Selectable models (client-safe). These are plain `provider/model` strings
+ * routed through the Vercel AI Gateway, so the set is easy to curate for a
+ * bring-your-own-key / open-source deployment. The first entry is the default
+ * shown when a user hasn't picked one; the routes fall back to the admin/global
+ * default then the env default if a preference is unset.
+ */
+export interface ModelOption {
+  id: string;
+  label: string;
+  hint?: string;
+}
+
+export const AVAILABLE_TEXT_MODELS: readonly ModelOption[] = [
+  { id: "openai/gpt-5.5", label: "GPT-5.5", hint: "OpenAI · balanced default" },
+  { id: "openai/gpt-5-mini", label: "GPT-5 mini", hint: "OpenAI · fast & cheap" },
+  { id: "anthropic/claude-sonnet-4.5", label: "Claude Sonnet 4.5", hint: "Anthropic" },
+  { id: "google/gemini-2.5-pro", label: "Gemini 2.5 Pro", hint: "Google" },
+  { id: "xai/grok-4", label: "Grok 4", hint: "xAI" },
+  { id: "moonshotai/kimi-k2", label: "Kimi K2", hint: "Moonshot · open weights" },
+] as const;
+
+/** Realtime voice models supported by the AI Gateway realtime endpoint. */
+export const AVAILABLE_REALTIME_MODELS: readonly ModelOption[] = [
+  { id: "openai/gpt-realtime-2", label: "GPT Realtime 2", hint: "OpenAI · default" },
+  { id: "openai/gpt-realtime-1.5", label: "GPT Realtime 1.5", hint: "OpenAI" },
+  { id: "openai/gpt-realtime-mini", label: "GPT Realtime mini", hint: "OpenAI · fast" },
+  { id: "xai/grok-voice-think-fast-1.0", label: "Grok Voice", hint: "xAI" },
+] as const;
+
 /** Default admin — granted the admin role automatically on first sign-in. */
 export const DEFAULT_ADMIN_EMAIL = (
   process.env.DEFAULT_ADMIN_EMAIL ?? "solsymbaiex@gmail.com"

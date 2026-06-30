@@ -42,6 +42,8 @@ export const updatePreferences = mutation({
       voice: v.optional(v.string()),
       conciseVoice: v.optional(v.boolean()),
       reducedMotion: v.optional(v.boolean()),
+      preferredTextModel: v.optional(v.string()),
+      preferredRealtimeModel: v.optional(v.string()),
     }),
   },
   handler: async (ctx, { preferences }) => {

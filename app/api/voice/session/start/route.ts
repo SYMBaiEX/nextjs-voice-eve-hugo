@@ -110,7 +110,10 @@ export async function POST(req: Request) {
 
   // Reuse the provided conversation or open a fresh voice conversation.
   let conversationId = body.conversationId as Id<"conversations"> | undefined;
-  const model = getRealtimeModel(runtime?.defaultRealtimeModel);
+  // Per-user realtime model preference wins, then admin/global default, then env.
+  const model = getRealtimeModel(
+    me.preferences?.preferredRealtimeModel ?? runtime?.defaultRealtimeModel,
+  );
   const voice = getDefaultVoice(runtime?.defaultVoice);
 
   let voiceSessionId: Id<"voiceSessions">;

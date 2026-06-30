@@ -24,6 +24,7 @@ import {
   type TranscriptMessage,
 } from "@/components/hugo/HugoTranscript";
 import { Greeting } from "@/components/chat/Greeting";
+import { ModelMenu } from "@/components/hugo/ModelMenu";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -508,8 +509,9 @@ function HugoSurfaceInner({
               e.preventDefault();
               submitText();
             }}
-            className="flex items-end gap-2 rounded-2xl border border-border bg-surface-elevated/50 p-2 backdrop-blur-sm focus-within:border-hugo-cyan/40"
+            className="flex flex-col gap-1.5 rounded-2xl border border-border bg-surface-elevated/50 p-2 backdrop-blur-sm focus-within:border-hugo-cyan/40"
           >
+            <div className="flex items-end gap-2">
             {/* Mic toggle */}
             <Button
               type="button"
@@ -557,6 +559,12 @@ function HugoSurfaceInner({
                 <SendHorizontal aria-hidden />
               </Button>
             )}
+            </div>
+
+            {/* Composer toolbar */}
+            <div className="flex items-center gap-2 px-1">
+              <ModelMenu />
+            </div>
           </form>
 
           {isStreaming && (

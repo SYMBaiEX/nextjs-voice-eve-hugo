@@ -97,4 +97,8 @@ export interface UserPreferences {
   voice?: string;
   conciseVoice?: boolean;
   reducedMotion?: boolean;
+  /** Preferred `provider/model` for text chat (falls back to global default). */
+  preferredTextModel?: string;
+  /** Preferred `provider/model` for realtime voice (falls back to global default). */
+  preferredRealtimeModel?: string;
 }
