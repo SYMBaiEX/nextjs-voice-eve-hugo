@@ -4,6 +4,7 @@
  */
 
 import type { Role } from "@/lib/constants";
+import type { Experimental_RealtimeToolDefinition } from "ai";
 
 export type { Role };
 
@@ -72,7 +73,7 @@ export interface RealtimeTokenResponse {
     voice: string;
     turnDetection: { type: "server-vad" };
   };
-  tools: ClientSafeToolDefinition[];
+  tools: Experimental_RealtimeToolDefinition[];
 }
 
 /** Tool metadata that is safe to send to the browser (no execute fn, no secrets). */

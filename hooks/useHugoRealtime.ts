@@ -89,6 +89,31 @@ export function useHugoRealtime(
   const realtime = useRealtime({
     model,
     api: { token: tokenEndpoint },
+    onToolCall: async ({ toolCall }) => {
+      if (!session) {
+        throw new Error("A voice session is required to run Hugo tools.");
+      }
+
+      const response = await fetch("/api/realtime/tool", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          args: toolCall.args,
+          toolCallId: toolCall.toolCallId,
+          toolName: toolCall.toolName,
+          voiceSessionId: session.voiceSessionId,
+        }),
+      });
+
+      if (!response.ok) {
+        const payload = (await response.json().catch(() => null)) as {
+          error?: string;
+        } | null;
+        throw new Error(payload?.error ?? "Realtime tool execution failed.");
+      }
+
+      return await response.json();
+    },
     sessionConfig: {
       voice: session?.voice ?? "alloy",
       turnDetection: { type: "server-vad" },

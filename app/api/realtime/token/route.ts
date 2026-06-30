@@ -1,5 +1,9 @@
 import { NextResponse } from "next/server";
 import { gateway } from "@ai-sdk/gateway";
+import {
+  experimental_getRealtimeToolDefinitions,
+  type Experimental_RealtimeToolDefinition,
+} from "ai";
 import { z } from "zod";
 import { fetchQuery, fetchMutation, authToken } from "@/lib/convex-server";
 import { api } from "@/convex/_generated/api";
@@ -8,8 +12,7 @@ import { getRealtimeModel, isAiConfigured } from "@/lib/ai";
 import { rateLimit } from "@/lib/rate-limit";
 import { REALTIME_TOKEN_RATE, REALTIME_TOKEN_TTL_SECONDS } from "@/lib/constants";
 import { track } from "@/lib/telemetry";
-import { clientSafeTools } from "@/agent/hugo/tools/registry";
-import type { ClientSafeToolDefinition } from "@/lib/types";
+import { buildHugoTools } from "@/agent/hugo/tools";
 
 const Body = z.object({
   sessionConfig: z
@@ -35,7 +38,7 @@ interface RealtimeTokenEnvelope {
     turnDetection: { type: "server-vad" };
   };
   token: string;
-  tools: ClientSafeToolDefinition[];
+  tools: Experimental_RealtimeToolDefinition[];
   url: string;
   voiceSessionId: string;
 }
@@ -181,7 +184,13 @@ export async function POST(req: Request) {
   // Mint for the same realtime model the voice session was created with, so
   // the token and the client codec agree without another settings read.
   const model = getRealtimeModel(session.model);
-  const tools = clientSafeTools("user");
+  const tools = await experimental_getRealtimeToolDefinitions({
+    tools: buildHugoTools({
+      conversationId: session.conversationId,
+      role: me.role,
+      token,
+    }),
+  });
   const cacheKey = tokenCacheKey({
     model,
     sessionConfig,
