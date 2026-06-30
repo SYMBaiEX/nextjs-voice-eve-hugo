@@ -12,7 +12,7 @@ import { getUserGateway } from "@/lib/user-gateway";
 import { rateLimit } from "@/lib/rate-limit";
 import { REALTIME_TOKEN_RATE, REALTIME_TOKEN_TTL_SECONDS } from "@/lib/constants";
 import { track } from "@/lib/telemetry";
-import { buildHugoTools } from "@/agent/hugo/tools";
+import { buildHugoTools } from "@/hugo-agent/tools";
 import type { RealtimeSessionConfig } from "@/lib/types";
 import {
   createRealtimeToolGrant,

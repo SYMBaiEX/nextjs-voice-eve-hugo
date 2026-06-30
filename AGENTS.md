@@ -20,15 +20,25 @@ pnpm lint && pnpm typecheck && pnpm test
 
 All three must pass. If you touched Convex functions, also run `pnpm convex:codegen` and commit the generated changes. `pnpm build` must also succeed.
 
-## The Eve agent layer (`agent/hugo/`)
+## Two agent stacks (in-process Hugo + the Eve showcase)
 
-Hugo is authored the **Eve** way (a filesystem-first agent: `instructions.md`, `skills/`, `tools/`, `agent.ts` via `defineAgent`), but invoked **in-process** from Next.js Route Handlers via AI SDK v7 (`lib/ai.ts` assembles the system prompt from `instructions.md` + `skills/`). This keeps Hugo a single, cleanly-deployable Next app.
+Hugo runs as **two** distinct agent stacks in one app:
 
-- **Instructions:** `agent/hugo/instructions.md` is Hugo's core system prompt.
-- **Skills:** add a focused Markdown file to `agent/hugo/skills/`; it is assembled into the prompt.
-- **Tools:** add an AI-SDK `tool()` in `agent/hugo/tools/index.ts`. Tools execute against Convex with the authenticated user's token, wrap `execute` in the existing `logged(...)` helper (records to the `toolCalls` ledger), and `redact(...)` sensitive I/O. Keep the client-safe projection in `agent/hugo/tools/registry.ts` in sync.
+### 1. The in-process Hugo agent (`hugo-agent/`) — voice + text
 
-To graduate to Eve's hosted durable runtime later: wrap `next.config` with `withEve` and run `eve dev` — no changes to the agent files required.
+The primary assistant. Authored the **Eve way** (filesystem-first: `instructions.md`, `skills/`, `tools/`) but invoked **in-process** from Next.js Route Handlers via AI SDK v7 (`lib/ai.ts` assembles the system prompt; `/api/chat` streams, voice uses AI Gateway realtime tokens). Both voice and text share this one definition.
+
+- **Instructions:** `hugo-agent/instructions.md` is Hugo's core system prompt.
+- **Skills:** add a focused Markdown file to `hugo-agent/skills/`.
+- **Tools:** add an AI-SDK `tool()` in `hugo-agent/tools/index.ts`. Tools execute against Convex with the authenticated user's token, wrap `execute` in `logged(...)`, and `redact(...)` sensitive I/O. Keep the client-safe projection in `hugo-agent/tools/registry.ts` in sync.
+
+### 2. The Eve runtime showcase (`agent/`) — text-only, at `/eve`
+
+"Hugo Labs" runs on the real **Eve durable runtime** (`eve@0.17.x`), wired via `withEve(nextConfig)` in `next.config.ts`. Eve is **out-of-process**: in dev a co-located `eve dev` server boots beside Next; on Vercel it co-deploys behind the web app, serving `/eve/v1/*` (rewritten by `withEve`). The `/eve` page talks to it with `useEveAgent` (`eve/react`).
+
+- Flat layout: `agent/agent.ts` (`defineAgent`), `agent/instructions.md`, `agent/tools/*.ts` (`defineTool`, filename = tool name), `agent/channels/eve.ts`.
+- **Safety:** every dangerous default-harness tool (`bash`, `read_file`, `write_file`, `glob`, `grep`, `web_fetch`, `web_search`) is disabled via `disableTool()` files; only the safe demo tools remain. Access is gated in `proxy.ts` (Convex auth on `/eve/v1/*`), so the channel uses `none()`.
+- Eve has **no realtime/voice support** — voice stays on the in-process stack. Requires Node ≥ 24. Build artifacts (`.eve/`, `.output/`, `.workflow-data/`) are gitignored.
 
 ## The Convex authorization invariant (non-negotiable)
 

@@ -15,16 +15,27 @@ import {
 const isSignInPage = createRouteMatcher(["/sign-in", "/sign-up"]);
 const isProtectedRoute = createRouteMatcher([
   "/chat(.*)",
-  "/conversations(.*)",
   "/settings(.*)",
   "/admin(.*)",
+  "/eve(.*)",
 ]);
+// The Eve showcase runtime is reached at /eve/v1/* (proxied by withEve). It's
+// the only gate in front of that runtime, so block unauthenticated callers here
+// with a 401 (not a redirect — these are API calls, not page loads).
+const isEveApi = createRouteMatcher(["/eve/v1(.*)"]);
 
 export default convexAuthNextjsMiddleware(async (request, { convexAuth }) => {
   const authed = await convexAuth.isAuthenticated();
 
   if (isSignInPage(request) && authed) {
     return nextjsMiddlewareRedirect(request, "/");
+  }
+
+  if (isEveApi(request) && !authed) {
+    return new Response(JSON.stringify({ error: "Unauthorized" }), {
+      status: 401,
+      headers: { "content-type": "application/json", "cache-control": "no-store" },
+    });
   }
 
   if (isProtectedRoute(request) && !authed) {

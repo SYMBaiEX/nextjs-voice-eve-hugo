@@ -1,4 +1,4 @@
-import { defineConfig } from "vitest/config";
+import { defineConfig, configDefaults } from "vitest/config";
 import path from "node:path";
 
 /**
@@ -20,5 +20,7 @@ export default defineConfig({
     environment: "edge-runtime",
     server: { deps: { inline: ["convex-test"] } },
     globals: true,
+    // Don't run tests from the generated Eve runtime build artifacts.
+    exclude: [...configDefaults.exclude, ".eve/**", ".output/**"],
   },
 });

@@ -49,3 +49,8 @@ bun.lock
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# Eve runtime build artifacts
+.eve/
+.output/
+.workflow-data/

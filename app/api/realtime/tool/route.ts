@@ -5,7 +5,7 @@ import { fetchMutation, fetchQuery, authToken } from "@/lib/convex-server";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
 import { track } from "@/lib/telemetry";
-import { buildHugoTools } from "@/agent/hugo/tools";
+import { buildHugoTools } from "@/hugo-agent/tools";
 import { rateLimit } from "@/lib/rate-limit";
 import { REALTIME_TOOL_RATE } from "@/lib/constants";
 import {

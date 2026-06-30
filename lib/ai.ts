@@ -7,12 +7,13 @@ import { join } from "node:path";
  *
  * Resolves models through the Vercel AI Gateway (bare `provider/model` strings,
  * routed by the global default provider) and assembles Hugo's system prompt
- * from the Eve agent directory (`agent/hugo/instructions.md` + skills). The
+ * from the in-process Hugo agent directory (`hugo-agent/instructions.md` +
+ * skills — `agent/` is the separate Eve showcase runtime). The
  * AI_GATEWAY_API_KEY lives only in the server environment and is never sent to
  * the browser.
  */
 
-export const HUGO_AGENT_DIR = join(process.cwd(), "agent", "hugo");
+export const HUGO_AGENT_DIR = join(process.cwd(), "hugo-agent");
 
 /** Embedded fallback so the prompt is never empty even if the file is absent. */
 const FALLBACK_INSTRUCTIONS = `You are Hugo, a realtime AI voice agent built on the Vercel AI stack.
@@ -220,5 +221,5 @@ export function isAiConfigured(): boolean {
   );
 }
 
-export { buildHugoTools } from "@/agent/hugo/tools";
-export type { HugoToolContext } from "@/agent/hugo/tools";
+export { buildHugoTools } from "@/hugo-agent/tools";
+export type { HugoToolContext } from "@/hugo-agent/tools";

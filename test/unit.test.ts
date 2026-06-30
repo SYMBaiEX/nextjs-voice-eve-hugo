@@ -27,7 +27,7 @@ import {
   clientSafeTools,
   USER_TOOLS,
   ADMIN_TOOLS,
-} from "@/agent/hugo/tools/registry";
+} from "@/hugo-agent/tools/registry";
 
 const admin: SessionUserLike = { role: "admin", status: "active" };
 const user: SessionUserLike = { role: "user", status: "active" };
@@ -170,7 +170,7 @@ describe("lib/utils", () => {
   });
 });
 
-describe("agent/hugo/tools/registry", () => {
+describe("hugo-agent/tools/registry", () => {
   const ALLOWED_KEYS = ["name", "description", "requiresApproval"].sort();
 
   test("clientSafeTools('user') returns the registered user tools", () => {
