@@ -28,6 +28,10 @@
   --grid-line: rgba(0, 0, 0, 0.035);
   --glow: rgba(8, 145, 178, 0.18);
 
+  /* Scrollbar thumb — quiet at rest, a touch stronger on hover. */
+  --scrollbar-thumb: rgba(0, 0, 0, 0.18);
+  --scrollbar-thumb-hover: rgba(0, 0, 0, 0.34);
+
   --radius: 0px;
 }
 
@@ -51,6 +55,9 @@
 
   --grid-line: rgba(255, 255, 255, 0.04);
   --glow: rgba(103, 232, 249, 0.22);
+
+  --scrollbar-thumb: rgba(255, 255, 255, 0.16);
+  --scrollbar-thumb-hover: rgba(255, 255, 255, 0.32);
 }
 
 @theme inline {
@@ -124,17 +131,42 @@ body {
   text-shadow: 0 0 24px var(--glow);
 }
 
-/* Thin custom scrollbars for the console aesthetic. */
+/*
+ * Minimal, theme-aware scrollbars (app-wide). A quiet rounded thumb that floats
+ * inside a transparent gutter (the transparent border + padding-box clip create
+ * the inset), strengthening slightly on hover. Firefox uses scrollbar-width /
+ * scrollbar-color; WebKit/Blink use the pseudo-elements.
+ */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--scrollbar-thumb) transparent;
+}
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-track,
+::-webkit-scrollbar-corner {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background-color: var(--scrollbar-thumb);
+  border-radius: 9999px;
+  border: 3px solid transparent;
+  background-clip: padding-box;
+  transition: background-color 0.15s ease;
+}
+::-webkit-scrollbar-thumb:hover {
+  background-color: var(--scrollbar-thumb-hover);
+}
+
+/* Extra-thin variant for dense surfaces (chat, menus, tables). */
 .scroll-thin::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
+  width: 8px;
+  height: 8px;
 }
 .scroll-thin::-webkit-scrollbar-thumb {
-  background: var(--border-strong);
-  border-radius: 0;
-}
-.scroll-thin::-webkit-scrollbar-track {
-  background: transparent;
+  border-width: 2px;
 }
 
 /*
