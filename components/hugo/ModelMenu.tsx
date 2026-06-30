@@ -1,8 +1,8 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery } from "convex/react";
-import { Check, ChevronUp, Cpu, Mic } from "lucide-react";
+import { Check, ChevronUp, Cpu, Mic, Search } from "lucide-react";
 import { toast } from "sonner";
 import { api } from "@/convex/_generated/api";
 import {
@@ -16,12 +16,17 @@ import { useAuthTransition } from "@/components/providers/ConvexClientProvider";
 /**
  * ModelMenu — the composer's model selector (chat + realtime voice).
  *
- * Shows the current chat model as a chip and opens an upward menu to pick the
- * chat and voice models, persisted per-user via `users.updatePreferences`. The
- * routes honor the preference (then the admin/global default, then env), so the
- * choice takes effect on the next message / voice session — the foundation for
- * a bring-your-own-key / open-source deployment.
+ * Shows the current chat model as a chip and opens a searchable menu listing the
+ * full model catalog the AI Gateway serves for this key (from /api/models), so a
+ * bring-your-own-key deployment can pick any available model. Selections persist
+ * per-user via `users.updatePreferences`; the routes honor the preference, then
+ * the admin/global default, then env.
  */
+
+function shortLabel(id: string): string {
+  return id.includes("/") ? id.slice(id.indexOf("/") + 1) : id;
+}
+
 export function ModelMenu() {
   const { canRunProtectedQueries } = useAuthTransition();
   const me = useQuery(
@@ -30,15 +35,21 @@ export function ModelMenu() {
   );
   const update = useMutation(api.users.updatePreferences);
   const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState("");
   const ref = useRef<HTMLDivElement>(null);
 
-  // The gateway-validated lists (only models this key can actually use); start
-  // from the curated constants and refine once /api/models resolves.
+  // Full gateway-served lists (+ effective defaults). Start from the curated
+  // constants and refine once /api/models resolves.
   const [textModels, setTextModels] =
     useState<readonly ModelOption[]>(AVAILABLE_TEXT_MODELS);
   const [realtimeModels, setRealtimeModels] = useState<readonly ModelOption[]>(
     AVAILABLE_REALTIME_MODELS,
   );
+  const [defaults, setDefaults] = useState<{ text: string; realtime: string }>({
+    text: AVAILABLE_TEXT_MODELS[0].id,
+    realtime: AVAILABLE_REALTIME_MODELS[0].id,
+  });
+
   useEffect(() => {
     if (!canRunProtectedQueries) return;
     let cancelled = false;
@@ -50,6 +61,11 @@ export function ModelMenu() {
           setTextModels(data.text);
         if (Array.isArray(data.realtime) && data.realtime.length)
           setRealtimeModels(data.realtime);
+        if (data.defaultText || data.defaultRealtime)
+          setDefaults({
+            text: data.defaultText ?? AVAILABLE_TEXT_MODELS[0].id,
+            realtime: data.defaultRealtime ?? AVAILABLE_REALTIME_MODELS[0].id,
+          });
       })
       .catch(() => {});
     return () => {
@@ -73,12 +89,11 @@ export function ModelMenu() {
     };
   }, [open]);
 
-  const textModel =
-    me?.preferences?.preferredTextModel ?? textModels[0]?.id ?? "";
+  const textModel = me?.preferences?.preferredTextModel ?? defaults.text;
   const realtimeModel =
-    me?.preferences?.preferredRealtimeModel ?? realtimeModels[0]?.id ?? "";
-  const textLabel =
-    textModels.find((m) => m.id === textModel)?.label ?? textModel;
+    me?.preferences?.preferredRealtimeModel ?? defaults.realtime;
+  const chipLabel =
+    textModels.find((m) => m.id === textModel)?.label ?? shortLabel(textModel);
 
   const pick = useCallback(
     async (key: "preferredTextModel" | "preferredRealtimeModel", id: string) => {
@@ -92,11 +107,35 @@ export function ModelMenu() {
     [update],
   );
 
+  const match = useCallback(
+    (m: ModelOption) => {
+      const q = query.trim().toLowerCase();
+      if (!q) return true;
+      return (
+        m.label.toLowerCase().includes(q) ||
+        m.id.toLowerCase().includes(q) ||
+        (m.hint ?? "").toLowerCase().includes(q)
+      );
+    },
+    [query],
+  );
+  const filteredText = useMemo(
+    () => textModels.filter(match),
+    [textModels, match],
+  );
+  const filteredRealtime = useMemo(
+    () => realtimeModels.filter(match),
+    [realtimeModels, match],
+  );
+
   return (
     <div ref={ref} className="relative">
       <button
         type="button"
-        onClick={() => setOpen((v) => !v)}
+        onClick={() => {
+          setQuery("");
+          setOpen((v) => !v);
+        }}
         aria-haspopup="menu"
         aria-expanded={open}
         aria-label="Select model"
@@ -106,7 +145,7 @@ export function ModelMenu() {
         )}
       >
         <Cpu aria-hidden className="size-3.5 text-text-muted" />
-        <span className="max-w-[16ch] truncate font-mono">{textLabel}</span>
+        <span className="max-w-[18ch] truncate font-mono">{chipLabel}</span>
         <ChevronUp
           aria-hidden
           className={cn("size-3.5 transition-transform", open && "rotate-180")}
@@ -117,23 +156,49 @@ export function ModelMenu() {
         <div
           role="menu"
           aria-label="Model selection"
-          className="panel animate-rise absolute bottom-[calc(100%+0.5rem)] left-0 z-50 w-64 overflow-hidden p-1.5 shadow-[0_12px_40px_-12px_rgba(0,0,0,0.6)]"
+          className="panel animate-rise absolute bottom-[calc(100%+0.5rem)] left-0 z-50 flex w-80 max-w-[calc(100vw-2rem)] flex-col overflow-hidden p-1.5 shadow-[0_12px_40px_-12px_rgba(0,0,0,0.6)]"
         >
-          <ModelSection
-            icon={<Cpu aria-hidden className="size-3.5" />}
-            title="Chat model"
-            options={textModels}
-            selected={textModel}
-            onSelect={(id) => void pick("preferredTextModel", id)}
-          />
-          <div className="my-1 h-px bg-border" />
-          <ModelSection
-            icon={<Mic aria-hidden className="size-3.5" />}
-            title="Voice model"
-            options={realtimeModels}
-            selected={realtimeModel}
-            onSelect={(id) => void pick("preferredRealtimeModel", id)}
-          />
+          <div className="relative px-1 pb-1.5">
+            <Search
+              aria-hidden
+              className="pointer-events-none absolute left-3 top-1/2 size-3.5 -translate-y-1/2 text-text-muted"
+            />
+            <input
+              autoFocus
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Search models…"
+              aria-label="Search models"
+              className="h-8 w-full rounded-md border border-border bg-surface-elevated/40 pl-8 pr-2 text-sm text-text-primary placeholder:text-text-muted outline-none focus-visible:border-hugo-cyan/40"
+            />
+          </div>
+
+          <div className="scroll-thin max-h-72 overflow-y-auto">
+            <ModelSection
+              icon={<Cpu aria-hidden className="size-3.5" />}
+              title="Chat model"
+              options={filteredText}
+              selected={textModel}
+              onSelect={(id) => void pick("preferredTextModel", id)}
+            />
+            {filteredRealtime.length > 0 && (
+              <>
+                <div className="my-1 h-px bg-border" />
+                <ModelSection
+                  icon={<Mic aria-hidden className="size-3.5" />}
+                  title="Voice model"
+                  options={filteredRealtime}
+                  selected={realtimeModel}
+                  onSelect={(id) => void pick("preferredRealtimeModel", id)}
+                />
+              </>
+            )}
+            {filteredText.length === 0 && filteredRealtime.length === 0 && (
+              <p className="px-2 py-4 text-center text-xs text-text-muted">
+                No models match “{query}”.
+              </p>
+            )}
+          </div>
         </div>
       )}
     </div>
@@ -153,9 +218,10 @@ function ModelSection({
   selected: string;
   onSelect: (id: string) => void;
 }) {
+  if (options.length === 0) return null;
   return (
     <div>
-      <p className="flex items-center gap-1.5 px-2 py-1 text-[0.65rem] font-mono uppercase tracking-wider text-text-muted">
+      <p className="sticky top-0 z-10 flex items-center gap-1.5 bg-surface/95 px-2 py-1 text-[0.65rem] font-mono uppercase tracking-wider text-text-muted backdrop-blur-sm">
         {icon}
         {title}
       </p>
