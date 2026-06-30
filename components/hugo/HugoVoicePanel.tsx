@@ -7,7 +7,7 @@ import { toast } from "sonner";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
 import { useHugoRealtime, type HugoRealtimeSession } from "@/hooks/useHugoRealtime";
-import { HugoOrbStage } from "@/components/hugo/HugoOrbStage";
+import { OrbSlot } from "@/components/hugo/OrbSlot";
 import { HugoSessionControls } from "@/components/hugo/HugoSessionControls";
 import { HugoTranscript, type TranscriptMessage } from "@/components/hugo/HugoTranscript";
 import { Button } from "@/components/ui/button";
@@ -228,9 +228,10 @@ export function HugoVoicePanel({
 
   return (
     <div className={cn("flex flex-col items-center gap-6", className)}>
-      {/* Orb hero — GPU ambient field + SVG orb (HugoOrbStage). */}
+      {/* Orb hero — the shared app-layer orb docks here and reflects live
+          realtime state + audio while this panel is mounted. */}
       <div className="relative grid place-items-center py-4">
-        <HugoOrbStage
+        <OrbSlot
           state={orbState}
           size={280}
           audioLevel={rt.audioLevel}

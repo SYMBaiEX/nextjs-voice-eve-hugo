@@ -594,18 +594,35 @@ export function HugoOrb({
     };
   }, [state, motionEpoch]);
 
-  const Wrapper = onClick ? "button" : "div";
+  const interactive = !!onClick;
 
+  // The root element type MUST stay stable (always a div). Swapping the root
+  // between <button> and <div> when `onClick` toggles makes React tear down and
+  // rebuild the entire SVG subtree, orphaning this orb's anime.js scope onto the
+  // detached nodes — the scope's looping motion-path animation then calls
+  // getPointAtLength on an "inactive document" every frame (an infinite error
+  // flood). Interactivity is expressed via role/tabIndex/handlers instead, which
+  // change in place without remounting anything. Full keyboard a11y preserved.
   return (
-    <Wrapper
-      ref={rootRef as never}
+    <div
+      ref={rootRef}
       onClick={onClick}
-      type={onClick ? "button" : undefined}
+      onKeyDown={
+        interactive
+          ? (e) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                onClick?.();
+              }
+            }
+          : undefined
+      }
+      role={interactive ? "button" : "img"}
+      tabIndex={interactive ? 0 : undefined}
       aria-label={style.label}
-      role={onClick ? undefined : "img"}
       className={cn(
         "relative grid place-items-center rounded-full",
-        onClick &&
+        interactive &&
           "cursor-pointer outline-none focus-visible:ring-2 focus-visible:ring-offset-4 focus-visible:ring-offset-background focus-visible:ring-hugo-cyan/60",
         className,
       )}
@@ -784,6 +801,6 @@ export function HugoOrb({
           </g>
         </g>
       </svg>
-    </Wrapper>
+    </div>
   );
 }
