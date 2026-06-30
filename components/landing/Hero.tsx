@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import { useConvexAuth, useQuery } from "convex/react";
 import { ArrowRight, Lock, MessageSquareText, Mic } from "lucide-react";
 import { createScope, createTimeline, stagger, utils, type Scope } from "animejs";
-import { HugoOrbStage } from "@/components/hugo/HugoOrbStage";
+import { OrbSlot } from "@/components/hugo/OrbSlot";
 import { buttonVariants } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
@@ -212,13 +212,9 @@ export function Hero({
     >
       {/* Orb — a single stable instance; state + destination derive from auth
           values so it never remounts (see note above). */}
+      {/* The shared app-layer orb docks here on the landing page. */}
       <div data-hero-orb data-hero-reveal style={hidden}>
-        <HugoOrbStage
-          state="idle"
-          size={280}
-          onClick={() => router.push(orbHref)}
-          className="drop-shadow-[0_0_80px_var(--glow)]"
-        />
+        <OrbSlot state="idle" size={280} onClick={() => router.push(orbHref)} />
       </div>
 
       {/* Eyebrow */}

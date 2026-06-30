@@ -141,8 +141,10 @@ export function HugoAmbientField({
           var fog = fbm(p * 2.4 + warp * 0.8 + vec2f(t * 0.6, t * 0.3));
           fog = fog * 0.6 + 0.2;
 
-          // radial falloff: concentrate behind the orb, dissolve into the void
-          let mask = smoothstep(0.85, 0.06, r);
+          // radial falloff: concentrate behind the orb, dissolve fully into the
+          // void BEFORE the canvas edge (r ~0.5) so the glow is never hard-cut
+          // by the canvas bounds — it fades out on its own.
+          let mask = smoothstep(0.5, 0.05, r);
 
           // soft orb-glow core, expands with audio amplitude
           let glowR = 0.14 + uGlow * 0.10 + uAudio * 0.14;
@@ -163,7 +165,7 @@ export function HugoAmbientField({
 
         setMode("gpu");
 
-        const dpr = Math.min(globalThis.devicePixelRatio ?? 1, 1.75);
+        const dpr = Math.min(globalThis.devicePixelRatio ?? 1, 1.5);
         const resize = () => {
           const w = Math.max(1, Math.floor(canvas.clientWidth * dpr));
           const h = Math.max(1, Math.floor(canvas.clientHeight * dpr));
@@ -300,10 +302,7 @@ export function HugoAmbientField({
   return (
     <div
       aria-hidden
-      className={cn(
-        "pointer-events-none absolute inset-0 overflow-hidden",
-        className,
-      )}
+      className={cn("pointer-events-none absolute inset-0", className)}
     >
       <canvas
         ref={canvasRef}

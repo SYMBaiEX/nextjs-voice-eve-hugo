@@ -9,7 +9,7 @@ import { APP_NAME, APP_TAGLINE } from "@/lib/constants";
 import { Button } from "@/components/ui/button";
 import { Input, Label } from "@/components/ui/input";
 import { Spinner } from "@/components/ui/misc";
-import { HugoOrb } from "@/components/hugo/HugoOrb";
+import { OrbSlot } from "@/components/hugo/OrbSlot";
 
 type AuthMode = "signIn" | "signUp";
 
@@ -104,7 +104,7 @@ export function AuthForm({ mode }: { mode: AuthMode }) {
   return (
     <div className="panel animate-rise w-full max-w-sm p-7 sm:p-8">
       <div className="flex flex-col items-center text-center">
-        <HugoOrb state="idle" size={72} />
+        <OrbSlot state="idle" size={72} />
         <h1 className="mt-5 text-lg font-semibold tracking-tight text-text-primary">
           {copy.title}
         </h1>

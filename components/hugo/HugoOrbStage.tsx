@@ -35,8 +35,9 @@ export function HugoOrbStage({
       className={cn("relative grid place-items-center", className)}
       style={{ width: size, height: size }}
     >
-      {/* Layer 1 — GPU ambient field, larger than the orb, behind it. */}
-      <div className="pointer-events-none absolute -inset-[45%] z-0">
+      {/* Layer 1 — GPU ambient field, much larger than the orb so its glow
+          fades into the void well beyond the orb instead of being clipped. */}
+      <div className="pointer-events-none absolute -inset-[65%] z-0">
         <HugoAmbientField state={state} audioLevel={audioLevel} />
       </div>
 

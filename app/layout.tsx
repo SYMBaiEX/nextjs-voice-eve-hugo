@@ -5,6 +5,7 @@ import { ConvexAuthNextjsServerProvider } from "@convex-dev/auth/nextjs/server";
 import { ConvexClientProvider } from "@/components/providers/ConvexClientProvider";
 import { ThemeProvider } from "@/components/providers/ThemeProvider";
 import { AppToaster } from "@/components/providers/AppToaster";
+import { OrbStageProvider } from "@/components/hugo/orb-stage";
 import { APP_NAME, APP_TAGLINE } from "@/lib/constants";
 
 const geistSans = Geist({
@@ -42,7 +43,7 @@ export default function RootLayout({
         <body className="min-h-full">
           <ThemeProvider>
             <ConvexClientProvider>
-              {children}
+              <OrbStageProvider>{children}</OrbStageProvider>
               <AppToaster />
             </ConvexClientProvider>
           </ThemeProvider>
