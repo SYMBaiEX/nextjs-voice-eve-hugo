@@ -86,12 +86,16 @@ export const end = mutation({
     const session = await ctx.db.get(args.voiceSessionId);
     if (!session) throw new Error("Session not found");
     assertOwnerOrAdmin(user, session.userId);
-    const endedAt = Date.now();
-    const durationMs = endedAt - session.startedAt;
+    const endedAt = session.endedAt ?? Date.now();
+    const durationMs = session.durationMs ?? endedAt - session.startedAt;
     await ctx.db.patch(args.voiceSessionId, {
-      status: args.status ?? "ended",
-      endedAt,
-      durationMs,
+      ...(session.endedAt === undefined
+        ? {
+            status: args.status ?? "ended",
+            endedAt,
+            durationMs,
+          }
+        : {}),
       ...(args.interruptionCount !== undefined
         ? { interruptionCount: args.interruptionCount }
         : {}),
@@ -100,25 +104,37 @@ export const end = mutation({
       ...(args.errorMessage ? { errorMessage: args.errorMessage } : {}),
     });
 
-    // Meter voice usage from the authoritative server-measured duration, so the
-    // daily voice-minute limit (checked at session start) cannot be bypassed by
-    // a client that omits audio-second fields (PRD 5.17). Split evenly between
-    // input/output for the cost estimate.
-    const seconds = Math.max(0, Math.round(durationMs / 1000));
-    const audioInputSeconds = Math.round(seconds / 2);
-    const audioOutputSeconds = seconds - audioInputSeconds;
-    await ctx.db.insert("usageEvents", {
-      userId: session.userId,
-      conversationId: session.conversationId,
-      voiceSessionId: args.voiceSessionId,
-      type: "voice_session",
-      provider: session.provider,
-      model: session.model,
-      audioInputSeconds,
-      audioOutputSeconds,
-      estimatedCost: estimateCost({ audioInputSeconds, audioOutputSeconds }),
-      createdAt: endedAt,
-    });
+    const existingUsage = await ctx.db
+      .query("usageEvents")
+      .withIndex("by_voiceSession", (q) =>
+        q.eq("voiceSessionId", args.voiceSessionId),
+      )
+      .take(10);
+    const alreadyMetered = existingUsage.some(
+      (event) => event.type === "voice_session",
+    );
+
+    if (!alreadyMetered) {
+      // Meter voice usage from the authoritative server-measured duration, so
+      // the daily voice-minute limit (checked at session start) cannot be
+      // bypassed by a client that omits audio-second fields (PRD 5.17). Split
+      // evenly between input/output for the cost estimate.
+      const seconds = Math.max(0, Math.round(durationMs / 1000));
+      const audioInputSeconds = Math.round(seconds / 2);
+      const audioOutputSeconds = seconds - audioInputSeconds;
+      await ctx.db.insert("usageEvents", {
+        userId: session.userId,
+        conversationId: session.conversationId,
+        voiceSessionId: args.voiceSessionId,
+        type: "voice_session",
+        provider: session.provider,
+        model: session.model,
+        audioInputSeconds,
+        audioOutputSeconds,
+        estimatedCost: estimateCost({ audioInputSeconds, audioOutputSeconds }),
+        createdAt: endedAt,
+      });
+    }
     return { ok: true };
   },
 });
@@ -163,18 +179,31 @@ export const listForAdmin = query({
   args: { status: v.optional(statusValidator), limit: v.optional(v.number()) },
   handler: async (ctx, { status, limit }) => {
     await requireAdmin(ctx);
-    const rows = await ctx.db
-      .query("voiceSessions")
-      .withIndex("by_started")
-      .order("desc")
-      .take(Math.min(limit ?? 100, 500));
-    const filtered = status ? rows.filter((s) => s.status === status) : rows;
-    return await Promise.all(
-      filtered.map(async (s) => {
-        const owner = await ctx.db.get(s.userId);
-        return { ...s, ownerEmail: owner?.email ?? null };
-      }),
+    const maxRows = Math.min(limit ?? 100, 500);
+    const rows = status
+      ? await ctx.db
+          .query("voiceSessions")
+          .withIndex("by_status_started", (q) => q.eq("status", status))
+          .order("desc")
+          .take(maxRows)
+      : await ctx.db
+          .query("voiceSessions")
+          .withIndex("by_started")
+          .order("desc")
+          .take(maxRows);
+    const ownerIds = [...new Set(rows.map((session) => session.userId))];
+    const ownerEmailById = new Map(
+      await Promise.all(
+        ownerIds.map(async (ownerId) => {
+          const owner = await ctx.db.get(ownerId);
+          return [ownerId, owner?.email ?? null] as const;
+        }),
+      ),
     );
+    return rows.map((s) => ({
+      ...s,
+      ownerEmail: ownerEmailById.get(s.userId) ?? null,
+    }));
   },
 });
 
@@ -196,7 +225,7 @@ export const getDiagnostics = query({
       .withIndex("by_voiceSession", (q) =>
         q.eq("voiceSessionId", voiceSessionId),
       )
-      .collect();
+      .take(10);
     return { session, events, usage };
   },
 });

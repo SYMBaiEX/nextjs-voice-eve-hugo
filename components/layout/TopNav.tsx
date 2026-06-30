@@ -13,7 +13,6 @@ import {
   Shield,
 } from "lucide-react";
 import { toast } from "sonner";
-import { animate } from "animejs";
 import { api } from "@/convex/_generated/api";
 import { cn, initials } from "@/lib/utils";
 import { buttonVariants } from "@/components/ui/button";
@@ -21,6 +20,7 @@ import { Avatar, Separator } from "@/components/ui/misc";
 import { Logo } from "@/components/layout/Logo";
 import { ThemeToggle } from "@/components/layout/ThemeToggle";
 import { useReducedMotion } from "@/components/motion/useReducedMotion";
+import { useAuthTransition } from "@/components/providers/ConvexClientProvider";
 
 interface MenuLink {
   href: string;
@@ -42,7 +42,16 @@ const BASE_LINKS: MenuLink[] = [
 function UserMenu() {
   const router = useRouter();
   const { signOut } = useAuthActions();
-  const me = useQuery(api.users.currentUser);
+  const {
+    beginSignOut,
+    canRunProtectedQueries,
+    clearSignOut,
+    isSigningOut,
+  } = useAuthTransition();
+  const me = useQuery(
+    api.users.currentUser,
+    canRunProtectedQueries ? {} : "skip",
+  );
   const [open, setOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
@@ -75,11 +84,15 @@ function UserMenu() {
     : BASE_LINKS;
 
   async function handleSignOut() {
+    if (isSigningOut) return;
     close();
+    beginSignOut();
     try {
       await signOut();
-      router.push("/");
+      router.replace("/");
+      router.refresh();
     } catch {
+      clearSignOut();
       toast.error("Could not sign out. Please try again.");
     }
   }
@@ -140,10 +153,11 @@ function UserMenu() {
             type="button"
             role="menuitem"
             onClick={handleSignOut}
+            disabled={isSigningOut}
             className="flex w-full items-center gap-2.5 rounded-md px-2.5 py-2 text-sm text-text-secondary transition-colors outline-none hover:bg-error/10 hover:text-error focus-visible:bg-error/10 focus-visible:text-error"
           >
             <LogOut className="size-4 shrink-0" />
-            Sign out
+            {isSigningOut ? "Signing out..." : "Sign out"}
           </button>
         </div>
       )}
@@ -168,15 +182,21 @@ export function TopNav() {
     const row = rowRef.current;
     if (!row || reducedMotion) return;
 
-    const anim = animate(row, {
-      opacity: [0, 1],
-      y: [-8, 0],
-      duration: 520,
-      ease: "out(3)",
+    let cancelled = false;
+    let anim: { revert: () => void } | null = null;
+    void import("animejs").then(({ animate }) => {
+      if (cancelled) return;
+      anim = animate(row, {
+        opacity: [0, 1],
+        y: [-8, 0],
+        duration: 520,
+        ease: "out(3)",
+      });
     });
 
     return () => {
-      anim.revert();
+      cancelled = true;
+      anim?.revert();
     };
   }, [reducedMotion]);
 

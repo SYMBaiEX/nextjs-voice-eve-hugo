@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useMutation, useQuery } from "convex/react";
 import { Plus, MessageSquarePlus, AudioLines, MessageSquare, Layers } from "lucide-react";
@@ -12,6 +12,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/misc";
 import { cn, timeAgo } from "@/lib/utils";
+import { useAuthTransition } from "@/components/providers/ConvexClientProvider";
 
 /**
  * ChatClient — the primary authenticated console (PRD 5.5).
@@ -51,12 +52,29 @@ function ModeBadge({ mode }: { mode: ConversationMode }) {
 export function ChatClient() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const {
+    canRunProtectedQueries,
+    isAuthenticated,
+    isAuthLoading,
+    isSigningOut,
+  } = useAuthTransition();
   const activeId = searchParams.get("c") ?? undefined;
 
-  const conversations = useQuery(api.conversations.list, {
-    status: "active",
-    limit: 30,
-  });
+  useEffect(() => {
+    if (!isSigningOut && !isAuthLoading && !isAuthenticated) {
+      router.replace("/sign-in");
+    }
+  }, [isAuthenticated, isAuthLoading, isSigningOut, router]);
+
+  const conversations = useQuery(
+    api.conversations.list,
+    canRunProtectedQueries
+      ? {
+          status: "active",
+          limit: 30,
+        }
+      : "skip",
+  );
   const createConversation = useMutation(api.conversations.create);
   const [creating, setCreating] = useState(false);
 
@@ -69,6 +87,10 @@ export function ChatClient() {
 
   const handleNew = useCallback(async () => {
     if (creating) return;
+    if (!canRunProtectedQueries) {
+      router.replace("/sign-in?next=/chat");
+      return;
+    }
     setCreating(true);
     try {
       const id = await createConversation({ mode: "mixed" });
@@ -78,9 +100,17 @@ export function ChatClient() {
     } finally {
       setCreating(false);
     }
-  }, [creating, createConversation, router]);
+  }, [canRunProtectedQueries, creating, createConversation, router]);
 
-  const isLoading = conversations === undefined;
+  const isLoading = isAuthLoading || conversations === undefined;
+
+  if (isSigningOut || (!isAuthLoading && !isAuthenticated)) {
+    return (
+      <div className="panel flex min-h-[24rem] items-center justify-center p-6 text-sm text-text-secondary">
+        {isSigningOut ? "Signing out..." : "Redirecting to sign in..."}
+      </div>
+    );
+  }
 
   return (
     <div className="flex w-full gap-6">

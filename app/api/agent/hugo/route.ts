@@ -5,8 +5,10 @@ import { fetchQuery, fetchMutation, authToken } from "@/lib/convex-server";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
 import {
+  buildHugoGatewayProviderOptions,
   buildHugoSystemPrompt,
   buildHugoTools,
+  getHugoTextCallSettings,
   getTextModel,
   isAiConfigured,
 } from "@/lib/ai";
@@ -93,30 +95,69 @@ export async function POST(req: Request) {
 
   const startedAt = Date.now();
   const model = getTextModel(runtime?.defaultTextModel);
-  const { text, usage: modelUsage } = await generateText({
-    model,
-    system: buildHugoSystemPrompt({ mode: "text", userName: me.name, role: me.role }),
-    prompt: parsed.data.prompt,
-    tools: buildHugoTools({ token, conversationId }),
-    stopWhen: stepCountIs(5),
-    experimental_telemetry: hugoTelemetry("hugo.agent", { userId: me._id }),
-  });
+  const callSettings = getHugoTextCallSettings("agent");
 
-  // Log usage so the call counts toward the daily cap and appears in cost rollups.
-  await fetchMutation(
-    api.usageEvents.log,
-    {
-      type: "text_message",
-      conversationId,
-      provider: "ai-gateway",
+  try {
+    const { text, usage: modelUsage } = await generateText({
       model,
-      inputTokens: modelUsage?.inputTokens,
-      outputTokens: modelUsage?.outputTokens,
-      latencyMs: Date.now() - startedAt,
-    },
-    { token },
-  ).catch(() => {});
+      system: buildHugoSystemPrompt({
+        mode: "text",
+        userName: me.name,
+        role: me.role,
+      }),
+      prompt: parsed.data.prompt,
+      tools: buildHugoTools({ token, conversationId }),
+      stopWhen: stepCountIs(5),
+      maxOutputTokens: callSettings.maxOutputTokens,
+      maxRetries: callSettings.maxRetries,
+      timeout: callSettings.timeoutMs,
+      providerOptions: buildHugoGatewayProviderOptions({
+        feature: "agent",
+        mode: "text",
+        userId: me._id,
+        conversationId,
+      }),
+      experimental_telemetry: hugoTelemetry("hugo.agent", {
+        ...(conversationId ? { conversationId } : {}),
+        userId: me._id,
+      }),
+    });
 
-  track("agent_invoke_completed", { userId: me._id });
-  return NextResponse.json({ text });
+    // Log usage so the call counts toward the daily cap and appears in cost rollups.
+    await fetchMutation(
+      api.usageEvents.log,
+      {
+        type: "text_message",
+        conversationId,
+        provider: "ai-gateway",
+        model,
+        inputTokens: modelUsage?.inputTokens,
+        outputTokens: modelUsage?.outputTokens,
+        latencyMs: Date.now() - startedAt,
+      },
+      { token },
+    ).catch(() => {});
+
+    track("agent_invoke_completed", {
+      conversationId,
+      inputTokens: modelUsage?.inputTokens ?? null,
+      latencyMs: Date.now() - startedAt,
+      model,
+      outputTokens: modelUsage?.outputTokens ?? null,
+      userId: me._id,
+    });
+    return NextResponse.json({ text });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Agent invocation failed";
+    track("agent_invoke_failed", {
+      conversationId,
+      error: message,
+      model,
+      userId: me._id,
+    });
+    return NextResponse.json(
+      { error: "Hugo couldn't complete that request right now." },
+      { status: 502 },
+    );
+  }
 }

@@ -21,12 +21,14 @@ export function HugoOrbStage({
   state = "idle",
   size = 280,
   audioLevel,
+  active = true,
   onClick,
   className,
 }: {
   state?: HugoOrbState;
   size?: number;
   audioLevel?: number;
+  active?: boolean;
   onClick?: () => void;
   className?: string;
 }) {
@@ -38,7 +40,11 @@ export function HugoOrbStage({
       {/* Layer 1 — GPU ambient field, much larger than the orb so its glow
           fades into the void well beyond the orb instead of being clipped. */}
       <div className="pointer-events-none absolute -inset-[65%] z-0">
-        <HugoAmbientField state={state} audioLevel={audioLevel} />
+        <HugoAmbientField
+          state={state}
+          audioLevel={audioLevel}
+          active={active}
+        />
       </div>
 
       {/* Layers 2 + 3 — blurred glow divs + the SVG orb (the instrument). */}
@@ -47,6 +53,7 @@ export function HugoOrbStage({
           state={state}
           size={size}
           audioLevel={audioLevel}
+          active={active}
           onClick={onClick}
         />
       </div>

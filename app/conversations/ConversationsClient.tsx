@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useMutation, useQuery } from "convex/react";
 import {
   Archive,
@@ -22,6 +23,7 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/misc";
 import { cn, timeAgo } from "@/lib/utils";
+import { useAuthTransition } from "@/components/providers/ConvexClientProvider";
 
 /**
  * ConversationsClient — conversation history (PRD 5.7).
@@ -80,19 +82,39 @@ function useDebounced<T>(value: T, delay = 250): T {
 }
 
 export function ConversationsClient() {
+  const router = useRouter();
+  const {
+    canRunProtectedQueries,
+    isAuthenticated,
+    isAuthLoading,
+    isSigningOut,
+  } = useAuthTransition();
   const [tab, setTab] = useState<Tab>("active");
   const [rawQuery, setRawQuery] = useState("");
   const query = useDebounced(rawQuery.trim());
   const searching = query.length > 0;
 
-  const listed = useQuery(api.conversations.list, {
-    status: tab,
-    limit: 100,
-  });
+  useEffect(() => {
+    if (!isSigningOut && !isAuthLoading && !isAuthenticated) {
+      router.replace("/sign-in");
+    }
+  }, [isAuthenticated, isAuthLoading, isSigningOut, router]);
+
+  const listed = useQuery(
+    api.conversations.list,
+    canRunProtectedQueries
+      ? {
+          status: tab,
+          limit: 100,
+        }
+      : "skip",
+  );
   // Only fire the search query when there is a needle ("skip" otherwise).
   const searched = useQuery(
     api.conversations.search,
-    searching ? { queryText: query, limit: 50 } : "skip",
+    canRunProtectedQueries && searching
+      ? { queryText: query, limit: 50 }
+      : "skip",
   );
 
   const setStatus = useMutation(api.conversations.setStatus);
@@ -101,6 +123,10 @@ export function ConversationsClient() {
 
   const handleNew = useCallback(async () => {
     if (creating) return;
+    if (!canRunProtectedQueries) {
+      router.replace("/sign-in?next=/chat");
+      return;
+    }
     setCreating(true);
     try {
       const id = await createConversation({ mode: "mixed" });
@@ -109,7 +135,7 @@ export function ConversationsClient() {
       toast.error("Couldn't start a new conversation.");
       setCreating(false);
     }
-  }, [creating, createConversation]);
+  }, [canRunProtectedQueries, creating, createConversation, router]);
 
   const handleArchive = useCallback(
     async (id: Id<"conversations">, next: "active" | "archived") => {
@@ -149,7 +175,15 @@ export function ConversationsClient() {
     return searching ? data.filter((c) => c.status === tab) : data;
   }, [searching, searched, listed, tab]);
 
-  const isLoading = rows === undefined;
+  const isLoading = isAuthLoading || rows === undefined;
+
+  if (isSigningOut || (!isAuthLoading && !isAuthenticated)) {
+    return (
+      <div className="panel flex min-h-[24rem] items-center justify-center p-6 text-sm text-text-secondary">
+        {isSigningOut ? "Signing out..." : "Redirecting to sign in..."}
+      </div>
+    );
+  }
 
   return (
     <div className="flex flex-col gap-5">

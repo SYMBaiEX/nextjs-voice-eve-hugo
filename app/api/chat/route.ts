@@ -11,13 +11,17 @@ import { fetchQuery, fetchMutation, authToken } from "@/lib/convex-server";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
 import {
+  buildHugoGatewayProviderOptions,
   buildHugoSystemPrompt,
   buildHugoTools,
+  getHugoTextCallSettings,
   getTextModel,
   isAiConfigured,
 } from "@/lib/ai";
 import { hugoTelemetry, track } from "@/lib/telemetry";
 import { isTextLimitReached } from "@/lib/usage";
+import { rateLimit } from "@/lib/rate-limit";
+import { REALTIME_TOKEN_RATE } from "@/lib/constants";
 
 export const maxDuration = 60;
 
@@ -49,6 +53,24 @@ export async function POST(req: Request) {
   const me = await fetchQuery(api.users.currentUser, {}, { token });
   if (!me) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  const burstLimit = rateLimit(
+    `chat:${me._id}`,
+    REALTIME_TOKEN_RATE.max,
+    REALTIME_TOKEN_RATE.windowMs,
+  );
+  if (!burstLimit.ok) {
+    track("chat_rate_limited", { userId: me._id });
+    return NextResponse.json(
+      { error: "Slow down a moment." },
+      {
+        status: 429,
+        headers: {
+          "Retry-After": String(Math.ceil(burstLimit.retryAfterMs / 1000)),
+        },
+      },
+    );
   }
 
   // Enforce daily text-message limit.
@@ -152,58 +174,86 @@ export async function POST(req: Request) {
 
   const startedAt = Date.now();
   const model = getTextModel(runtime?.defaultTextModel);
+  const callSettings = getHugoTextCallSettings("chat");
 
-  const result = streamText({
-    model,
-    system,
-    messages: modelMessages,
-    tools: buildHugoTools({ token, conversationId }),
-    stopWhen: stepCountIs(5),
-    experimental_telemetry: hugoTelemetry("hugo.chat", {
-      conversationId,
-      userId: me._id,
-    }),
-    onFinish: async ({ text, usage: modelUsage }) => {
-      try {
-        if (text) {
+  try {
+    const result = streamText({
+      model,
+      system,
+      messages: modelMessages,
+      tools: buildHugoTools({ token, conversationId }),
+      stopWhen: stepCountIs(5),
+      maxOutputTokens: callSettings.maxOutputTokens,
+      maxRetries: callSettings.maxRetries,
+      timeout: callSettings.timeoutMs,
+      providerOptions: buildHugoGatewayProviderOptions({
+        feature: "chat",
+        mode: "text",
+        userId: me._id,
+        conversationId,
+      }),
+      experimental_telemetry: hugoTelemetry("hugo.chat", {
+        conversationId,
+        userId: me._id,
+      }),
+      onFinish: async ({ text, usage: modelUsage }) => {
+        try {
+          if (text) {
+            await fetchMutation(
+              api.messages.append,
+              {
+                conversationId: conversationId!,
+                role: "assistant",
+                modality: "text",
+                content: text,
+              },
+              { token },
+            );
+          }
           await fetchMutation(
-            api.messages.append,
+            api.usageEvents.log,
             {
-              conversationId: conversationId!,
-              role: "assistant",
-              modality: "text",
-              content: text,
+              type: "text_message",
+              conversationId,
+              provider: "ai-gateway",
+              model,
+              inputTokens: modelUsage?.inputTokens,
+              outputTokens: modelUsage?.outputTokens,
+              latencyMs: Date.now() - startedAt,
             },
             { token },
           );
-        }
-        await fetchMutation(
-          api.usageEvents.log,
-          {
-            type: "text_message",
+          track("assistant_response_completed", {
             conversationId,
-            provider: "ai-gateway",
-            model,
-            inputTokens: modelUsage?.inputTokens,
-            outputTokens: modelUsage?.outputTokens,
+            inputTokens: modelUsage?.inputTokens ?? null,
             latencyMs: Date.now() - startedAt,
-          },
-          { token },
-        );
-        track("assistant_response_completed", {
-          conversationId,
-          model,
-          latencyMs: Date.now() - startedAt,
-        });
-      } catch {
-        /* persistence is best-effort; the stream already succeeded */
-      }
-    },
-  });
+            model,
+            outputTokens: modelUsage?.outputTokens ?? null,
+            userId: me._id,
+          });
+        } catch {
+          /* persistence is best-effort; the stream already succeeded */
+        }
+      },
+    });
 
-  return result.toUIMessageStreamResponse({
-    headers: { "x-conversation-id": conversationId },
-  });
+    return result.toUIMessageStreamResponse({
+      headers: { "x-conversation-id": conversationId },
+    });
+  } catch (err) {
+    const message =
+      err instanceof Error ? err.message : "Failed to generate response";
+    track("assistant_response_failed", {
+      conversationId,
+      error: message,
+      model,
+      userId: me._id,
+    });
+    return NextResponse.json(
+      { error: "Hugo couldn't respond right now. Please try again." },
+      { status: 502 },
+    );
+  }
 }
 
 /** Extract concatenated text from a UIMessage's parts. */

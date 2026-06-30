@@ -34,3 +34,26 @@ export function useReducedMotion(): boolean {
 
   return useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);
 }
+
+/**
+ * useDocumentVisible — SSR-safe subscription to tab visibility so expensive
+ * animation systems can pause while the page is hidden.
+ */
+export function useDocumentVisible(): boolean {
+  const subscribe = useCallback((onChange: () => void) => {
+    if (typeof document === "undefined") {
+      return () => {};
+    }
+    document.addEventListener("visibilitychange", onChange);
+    return () => document.removeEventListener("visibilitychange", onChange);
+  }, []);
+
+  const getSnapshot = useCallback(() => {
+    if (typeof document === "undefined") return true;
+    return document.visibilityState === "visible";
+  }, []);
+
+  const getServerSnapshot = useCallback(() => true, []);
+
+  return useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);
+}

@@ -30,6 +30,7 @@ export interface HugoAmbientFieldProps {
   state?: HugoOrbState;
   /** Smoothed 0..1 amplitude; swells the field while listening/speaking. */
   audioLevel?: number;
+  active?: boolean;
   className?: string;
 }
 
@@ -38,6 +39,7 @@ const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
 export function HugoAmbientField({
   state = "idle",
   audioLevel,
+  active = true,
   className,
 }: HugoAmbientFieldProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -61,6 +63,8 @@ export function HugoAmbientField({
 
   // ── GPU setup (once). Falls back to CSS on any failure. ──────────────────
   useEffect(() => {
+    if (!active) return;
+
     const canvas = canvasRef.current;
     if (!canvas) return;
     // No WebGPU → stay on the default CSS field (no setState needed).
@@ -163,10 +167,13 @@ export function HugoAmbientField({
           fragment,
         });
 
-        setMode("gpu");
+        if (!disposed) {
+          setMode("gpu");
+        }
 
-        const dpr = Math.min(globalThis.devicePixelRatio ?? 1, 1.5);
+        const getDpr = () => Math.min(globalThis.devicePixelRatio ?? 1, 1.5);
         const resize = () => {
+          const dpr = getDpr();
           const w = Math.max(1, Math.floor(canvas.clientWidth * dpr));
           const h = Math.max(1, Math.floor(canvas.clientHeight * dpr));
           if (canvas.width !== w || canvas.height !== h) {
@@ -177,6 +184,7 @@ export function HugoAmbientField({
         };
         const ro = new ResizeObserver(resize);
         ro.observe(canvas);
+        window.addEventListener("resize", resize);
         resize();
 
         // Smoothed shader state so transitions ease like the orb's color tween.
@@ -274,6 +282,7 @@ export function HugoAmbientField({
           raf = 0;
           document.removeEventListener("visibilitychange", onVis);
           mql.removeEventListener("change", onMql);
+          window.removeEventListener("resize", resize);
           ro.disconnect();
           io.disconnect();
           root.destroy();
@@ -290,7 +299,7 @@ export function HugoAmbientField({
       if (raf !== 0) cancelAnimationFrame(raf);
       teardown();
     };
-  }, []);
+  }, [active]);
 
   // CSS fallback tint follows the same per-state color source as the GPU path.
   const fs = fieldStyleFor(state);

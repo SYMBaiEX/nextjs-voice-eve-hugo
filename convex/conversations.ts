@@ -172,22 +172,50 @@ export const listForAdmin = query({
   },
   handler: async (ctx, { mode, status, limit }) => {
     await requireAdmin(ctx);
-    const rows = await ctx.db
-      .query("conversations")
-      .withIndex("by_lastMessage")
-      .order("desc")
-      .take(Math.min(limit ?? 100, 500));
-    const filtered = rows.filter(
-      (c) =>
-        (!mode || c.mode === mode) && (!status || c.status === status),
+    const maxRows = Math.min(limit ?? 100, 500);
+    const rows =
+      status && mode
+        ? await ctx.db
+            .query("conversations")
+            .withIndex("by_status_mode_lastMessage", (q) =>
+              q.eq("status", status).eq("mode", mode),
+            )
+            .order("desc")
+            .take(maxRows)
+        : status
+          ? await ctx.db
+              .query("conversations")
+              .withIndex("by_status_lastMessage", (q) =>
+                q.eq("status", status),
+              )
+              .order("desc")
+              .take(maxRows)
+          : mode
+            ? await ctx.db
+                .query("conversations")
+                .withIndex("by_mode_lastMessage", (q) =>
+                  q.eq("mode", mode),
+                )
+                .order("desc")
+                .take(maxRows)
+            : await ctx.db
+                .query("conversations")
+                .withIndex("by_lastMessage")
+                .order("desc")
+                .take(maxRows);
+    const ownerIds = [...new Set(rows.map((c) => c.userId))];
+    const ownerEmailById = new Map(
+      await Promise.all(
+        ownerIds.map(async (ownerId) => {
+          const owner = await ctx.db.get(ownerId);
+          return [ownerId, owner?.email ?? null] as const;
+        }),
+      ),
     );
-    // Decorate with owner email for the admin table.
-    return await Promise.all(
-      filtered.map(async (c) => {
-        const owner = await ctx.db.get(c.userId);
-        return { ...c, ownerEmail: owner?.email ?? null };
-      }),
-    );
+    return rows.map((c) => ({
+      ...c,
+      ownerEmail: ownerEmailById.get(c.userId) ?? null,
+    }));
   },
 });
 
