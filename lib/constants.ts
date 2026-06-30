@@ -39,6 +39,9 @@ export const DAILY_TEXT_MESSAGES_LIMIT = Number(
 /** Rate limit for realtime token minting (per user, sliding window). */
 export const REALTIME_TOKEN_RATE = { max: 10, windowMs: 60_000 } as const;
 
+/** Rate limit for realtime tool executions (per user + voice session). */
+export const REALTIME_TOOL_RATE = { max: 30, windowMs: 60_000 } as const;
+
 /** Realtime browser token TTL hint (informational; the gateway controls actual TTL). */
 export const REALTIME_TOKEN_TTL_SECONDS = 60;
 

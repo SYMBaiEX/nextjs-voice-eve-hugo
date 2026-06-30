@@ -62,6 +62,13 @@ export type UsageEventType =
   | "model_fallback";
 
 /** Response shape of POST /api/realtime/token (client-safe — never includes keys). */
+export interface RealtimeSessionConfig {
+  voice: string;
+  instructions?: string;
+  inputAudioTranscription?: Record<string, never>;
+  turnDetection: { type: "server-vad" };
+}
+
 export interface RealtimeTokenResponse {
   expiresAt: number;
   token: string;
@@ -69,10 +76,7 @@ export interface RealtimeTokenResponse {
   model: string;
   voiceSessionId: string;
   conversationId: string;
-  sessionConfig: {
-    voice: string;
-    turnDetection: { type: "server-vad" };
-  };
+  sessionConfig: RealtimeSessionConfig;
   tools: Experimental_RealtimeToolDefinition[];
 }
 

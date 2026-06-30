@@ -13,10 +13,19 @@ import { rateLimit } from "@/lib/rate-limit";
 import { REALTIME_TOKEN_RATE, REALTIME_TOKEN_TTL_SECONDS } from "@/lib/constants";
 import { track } from "@/lib/telemetry";
 import { buildHugoTools } from "@/agent/hugo/tools";
+import type { RealtimeSessionConfig } from "@/lib/types";
+import {
+  createRealtimeToolGrant,
+  encodeRealtimeToolGrantCookie,
+  realtimeToolGrantMetadata,
+  REALTIME_TOOL_GRANT_COOKIE,
+} from "@/lib/realtime-grants";
 
 const Body = z.object({
   sessionConfig: z
     .object({
+      inputAudioTranscription: z.object({}).optional(),
+      instructions: z.string().min(1).max(16_000).optional(),
       voice: z.string().min(1).optional(),
       turnDetection: z.object({ type: z.literal("server-vad") }).optional(),
     })
@@ -33,10 +42,7 @@ interface RealtimeTokenEnvelope {
   conversationId: string;
   expiresAt: number;
   model: string;
-  sessionConfig: {
-    voice: string;
-    turnDetection: { type: "server-vad" };
-  };
+  sessionConfig: RealtimeSessionConfig;
   token: string;
   tools: Experimental_RealtimeToolDefinition[];
   url: string;
@@ -54,7 +60,7 @@ const realtimeTokenCache = new Map<string, CachedRealtimeToken>();
 
 function tokenCacheKey(args: {
   model: string;
-  sessionConfig: Record<string, unknown> | undefined;
+  sessionConfig: RealtimeSessionConfig | undefined;
   userId: string;
   voiceSessionId: string;
 }): string {
@@ -102,6 +108,49 @@ function realtimeResponse(
   return NextResponse.json(payload, {
     headers: NO_STORE_HEADERS,
   });
+}
+
+async function mintRealtimeToolGrant(args: {
+  expiresAtMs: number;
+  token: string;
+  voiceSessionId: Id<"voiceSessions">;
+}): Promise<string> {
+  const grant = createRealtimeToolGrant();
+  const metadata = realtimeToolGrantMetadata(grant, args.expiresAtMs);
+  await fetchMutation(
+    api.voiceSessions.setRealtimeToolGrant,
+    {
+      voiceSessionId: args.voiceSessionId,
+      grantHash: metadata.hash,
+      expiresAtMs: metadata.expiresAtMs,
+      issuedAtMs: metadata.issuedAtMs,
+    },
+    { token: args.token },
+  );
+  return grant;
+}
+
+function attachRealtimeToolGrantCookie(args: {
+  grant: string;
+  response: ReturnType<typeof NextResponse.json>;
+  voiceSessionId: string;
+  expiresAtMs: number;
+}): ReturnType<typeof NextResponse.json> {
+  args.response.cookies.set(
+    REALTIME_TOOL_GRANT_COOKIE,
+    encodeRealtimeToolGrantCookie({
+      grant: args.grant,
+      voiceSessionId: args.voiceSessionId,
+    }),
+    {
+      expires: new Date(args.expiresAtMs),
+      httpOnly: true,
+      path: "/api/realtime",
+      sameSite: "strict",
+      secure: process.env.NODE_ENV === "production",
+    },
+  );
+  return args.response;
 }
 
 /**
@@ -174,10 +223,15 @@ export async function POST(req: Request) {
   }
 
   const parsed = Body.safeParse(await req.json().catch(() => ({})));
-  const sessionConfig = {
-    voice: parsed.success
-      ? (parsed.data.sessionConfig?.voice ?? session.voice)
-      : session.voice,
+  const requestedConfig = parsed.success ? parsed.data.sessionConfig : undefined;
+  const sessionConfig: RealtimeSessionConfig = {
+    ...(requestedConfig?.inputAudioTranscription
+      ? { inputAudioTranscription: {} }
+      : {}),
+    ...(requestedConfig?.instructions
+      ? { instructions: requestedConfig.instructions }
+      : {}),
+    voice: requestedConfig?.voice ?? session.voice,
     turnDetection: { type: "server-vad" as const },
   };
 
@@ -199,24 +253,52 @@ export async function POST(req: Request) {
   });
   const cached = getCachedRealtimeToken(cacheKey);
   if (cached) {
-    await fetchMutation(
-      api.voiceSessions.updateStatus,
-      { voiceSessionId: sessionParam, status: "connecting" },
-      { token },
-    ).catch(() => {});
+    let grant: string;
+    try {
+      grant = await mintRealtimeToolGrant({
+        expiresAtMs: cached.expiresAtMs,
+        token,
+        voiceSessionId: sessionParam,
+      });
+      await fetchMutation(
+        api.voiceSessions.updateStatus,
+        { voiceSessionId: sessionParam, status: "connecting" },
+        { token },
+      ).catch(() => {});
+    } catch (err) {
+      const message =
+        err instanceof Error
+          ? err.message
+          : "Failed to authorize realtime tools.";
+      track("realtime_tool_grant_failed", {
+        error: message,
+        model,
+        userId: me._id,
+        voiceSessionId: sessionParam,
+      });
+      return NextResponse.json(
+        { error: "Could not authorize realtime tools." },
+        { status: voiceSessionLookupStatus(message), headers: NO_STORE_HEADERS },
+      );
+    }
     track("realtime_token_reused", {
       model,
       userId: me._id,
       voiceSessionId: sessionParam,
     });
-    return realtimeResponse({
-      conversationId: session.conversationId,
-      expiresAt: Math.floor(cached.expiresAtMs / 1000),
-      model,
-      sessionConfig,
-      token: cached.token,
-      tools,
-      url: cached.url,
+    return attachRealtimeToolGrantCookie({
+      expiresAtMs: cached.expiresAtMs,
+      grant,
+      response: realtimeResponse({
+        conversationId: session.conversationId,
+        expiresAt: Math.floor(cached.expiresAtMs / 1000),
+        model,
+        sessionConfig,
+        token: cached.token,
+        tools,
+        url: cached.url,
+        voiceSessionId: sessionParam,
+      }),
       voiceSessionId: sessionParam,
     });
   }
@@ -282,6 +364,12 @@ export async function POST(req: Request) {
     });
     pruneRealtimeTokenCache();
 
+    const grant = await mintRealtimeToolGrant({
+      expiresAtMs,
+      token,
+      voiceSessionId: sessionParam,
+    });
+
     await fetchMutation(
       api.voiceSessions.updateStatus,
       { voiceSessionId: sessionParam, status: "connecting" },
@@ -295,14 +383,19 @@ export async function POST(req: Request) {
       voiceSessionId: sessionParam,
     });
 
-    return realtimeResponse({
-      conversationId: session.conversationId,
-      expiresAt: Math.floor(expiresAtMs / 1000),
-      model,
-      sessionConfig,
-      token: realtimeToken,
-      tools,
-      url: realtimeUrl,
+    return attachRealtimeToolGrantCookie({
+      expiresAtMs,
+      grant,
+      response: realtimeResponse({
+        conversationId: session.conversationId,
+        expiresAt: Math.floor(expiresAtMs / 1000),
+        model,
+        sessionConfig,
+        token: realtimeToken,
+        tools,
+        url: realtimeUrl,
+        voiceSessionId: sessionParam,
+      }),
       voiceSessionId: sessionParam,
     });
   } catch (err) {

@@ -239,4 +239,110 @@ describe("convex data-access behavior", () => {
       }),
     ).rejects.toThrow(/Forbidden/i);
   });
+
+  test("messages.appendVoiceTurn is idempotent per realtime source id", async () => {
+    const t = convexTest(schema, modules);
+    const userId = await insertUser(t, {
+      email: "voice@example.com",
+      createdAt: 1,
+    });
+
+    const { conversationId, voiceSessionId } = await t.run(async (ctx) => {
+      const conversationId = await ctx.db.insert("conversations", {
+        userId,
+        title: "Voice session",
+        mode: "voice",
+        status: "active",
+        createdAt: 100,
+        updatedAt: 100,
+        lastMessageAt: 100,
+      });
+      const voiceSessionId = await ctx.db.insert("voiceSessions", {
+        userId,
+        conversationId,
+        provider: "ai-gateway",
+        model: "openai/gpt-realtime-2",
+        voice: "alloy",
+        status: "active",
+        startedAt: 200,
+        interruptionCount: 0,
+        turnCount: 0,
+      });
+      return { conversationId, voiceSessionId };
+    });
+
+    const authed = t.withIdentity({ subject: userId });
+    const firstId = await authed.mutation(api.messages.appendVoiceTurn, {
+      voiceSessionId,
+      sourceId: "user-input-item-1",
+      role: "user",
+      content: "Please remember this voice turn.",
+    });
+    const secondId = await authed.mutation(api.messages.appendVoiceTurn, {
+      voiceSessionId,
+      sourceId: "user-input-item-1",
+      role: "user",
+      content: "Please remember this voice turn.",
+    });
+
+    expect(secondId).toBe(firstId);
+
+    const messages = await authed.query(api.messages.list, {
+      conversationId,
+      limit: 10,
+    });
+    expect(messages).toHaveLength(1);
+    expect(messages[0]?.modality).toBe("audio");
+    expect(messages[0]?.sourceId).toBe("user-input-item-1");
+    expect(messages[0]?.transcript).toBe("Please remember this voice turn.");
+
+    const session = await t.run(async (ctx) => ctx.db.get(voiceSessionId));
+    expect(session?.status).toBe("active");
+    expect(session?.turnCount).toBe(1);
+  });
+
+  test("messages.appendVoiceTurn rejects a different authenticated user", async () => {
+    const t = convexTest(schema, modules);
+    const ownerId = await insertUser(t, {
+      email: "owner@example.com",
+      createdAt: 1,
+    });
+    const attackerId = await insertUser(t, {
+      email: "attacker@example.com",
+      createdAt: 2,
+    });
+
+    const voiceSessionId = await t.run(async (ctx) => {
+      const conversationId = await ctx.db.insert("conversations", {
+        userId: ownerId,
+        title: "protected voice",
+        mode: "voice",
+        status: "active",
+        createdAt: 100,
+        updatedAt: 100,
+        lastMessageAt: 100,
+      });
+      return await ctx.db.insert("voiceSessions", {
+        userId: ownerId,
+        conversationId,
+        provider: "ai-gateway",
+        model: "openai/gpt-realtime-2",
+        voice: "alloy",
+        status: "active",
+        startedAt: 200,
+        interruptionCount: 0,
+        turnCount: 0,
+      });
+    });
+
+    const attacker = t.withIdentity({ subject: attackerId });
+    await expect(
+      attacker.mutation(api.messages.appendVoiceTurn, {
+        voiceSessionId,
+        sourceId: "stolen-source",
+        role: "user",
+        content: "not mine",
+      }),
+    ).rejects.toThrow(/Forbidden/i);
+  });
 });

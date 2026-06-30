@@ -1,9 +1,10 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { fetchMutation, authToken } from "@/lib/convex-server";
+import { fetchMutation, fetchQuery, authToken } from "@/lib/convex-server";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
 import { track } from "@/lib/telemetry";
+import { routeErrorMessage, statusFromConvexError } from "@/lib/route-errors";
 
 /**
  * POST /api/voice/session/end (PRD 5.4, 5.9)
@@ -26,36 +27,84 @@ const Body = z.object({
   errorMessage: z.string().optional(),
 });
 
+const NO_STORE_HEADERS = {
+  "Cache-Control": "no-store",
+  "Vercel-CDN-Cache-Control": "no-store",
+  "CDN-Cache-Control": "no-store",
+} as const;
+
 export async function POST(req: Request) {
   const token = await authToken();
   if (!token) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    return NextResponse.json(
+      { error: "Unauthorized" },
+      { status: 401, headers: NO_STORE_HEADERS },
+    );
   }
 
   const parsed = Body.safeParse(await req.json().catch(() => ({})));
   if (!parsed.success) {
-    return NextResponse.json({ error: "Invalid request" }, { status: 400 });
+    return NextResponse.json(
+      { error: "Invalid request" },
+      { status: 400, headers: NO_STORE_HEADERS },
+    );
   }
   const b = parsed.data;
   const voiceSessionId = b.voiceSessionId as Id<"voiceSessions">;
-  const conversationId = b.conversationId as Id<"conversations"> | undefined;
+  let conversationId: Id<"conversations">;
+  try {
+    const session = await fetchQuery(
+      api.voiceSessions.getOwn,
+      { voiceSessionId },
+      { token },
+    );
+    if (!session) {
+      return NextResponse.json(
+        { error: "Voice session not found." },
+        { status: 404, headers: NO_STORE_HEADERS },
+      );
+    }
+    conversationId = session.conversationId;
+  } catch (err) {
+    const message = routeErrorMessage(err, "Failed to validate voice session.");
+    track("voice_session_end_lookup_failed", {
+      error: message,
+      voiceSessionId,
+    });
+    return NextResponse.json(
+      { error: "Could not validate voice session." },
+      { status: statusFromConvexError(err), headers: NO_STORE_HEADERS },
+    );
+  }
 
   // voiceSessions.end meters audio usage from the server-measured duration, so
   // the route no longer logs a (client-supplied, bypassable) usage event here.
-  await fetchMutation(
-    api.voiceSessions.end,
-    {
+  try {
+    await fetchMutation(
+      api.voiceSessions.end,
+      {
+        voiceSessionId,
+        status: b.status ?? "ended",
+        interruptionCount: b.interruptionCount,
+        turnCount: b.turnCount,
+        errorCode: b.errorCode,
+        errorMessage: b.errorMessage,
+      },
+      { token },
+    );
+  } catch (err) {
+    const message = routeErrorMessage(err, "Could not end voice session.");
+    track("voice_session_end_failed", {
+      error: message,
       voiceSessionId,
-      status: b.status ?? "ended",
-      interruptionCount: b.interruptionCount,
-      turnCount: b.turnCount,
-      errorCode: b.errorCode,
-      errorMessage: b.errorMessage,
-    },
-    { token },
-  );
+    });
+    return NextResponse.json(
+      { error: "Could not end voice session." },
+      { status: statusFromConvexError(err), headers: NO_STORE_HEADERS },
+    );
+  }
 
-  if (b.summary && conversationId) {
+  if (b.summary) {
     await fetchMutation(
       api.conversations.setSummary,
       { conversationId, summary: b.summary },
@@ -80,5 +129,5 @@ export async function POST(req: Request) {
     interruptions: b.interruptionCount ?? 0,
   });
 
-  return NextResponse.json({ ok: true });
+  return NextResponse.json({ ok: true }, { headers: NO_STORE_HEADERS });
 }

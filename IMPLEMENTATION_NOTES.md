@@ -38,13 +38,20 @@ production-safe choice is documented here.
    `POST /api/voice/session/start` (auth + daily-voice-limit) creates the
    conversation + voiceSession and returns ids; the client hook posts to
    `POST /api/realtime/token?session=ID` (auth + per-user rate limit) which mints a
-   short-lived gateway token server-side and returns only `{ token, url }`. If the
-   key is absent or minting fails, the route signals a graceful **fallback to text**.
+   short-lived gateway token server-side and sets an HttpOnly same-site realtime
+   tool grant cookie. Realtime tools are exposed as AI SDK v7 realtime function
+   definitions, but execution stays in `/api/realtime/tool`, where the session,
+   grant, ownership, and rate limit are checked again. The client session enables
+   server VAD and input transcription so finalized voice turns can persist into
+   Convex messages. If the key is absent or minting fails, the route signals a
+   graceful **fallback to text**.
 
 4. **Local dev uses anonymous local Convex** (`CONVEX_AGENT_MODE=anonymous`),
-   configured in `.env.local`. Auth JWT keys + `SITE_URL` were set on the deployment
-   via `npx @convex-dev/auth`. For cloud, run `npx convex dev` to link a project and
-   re-run the auth initializer, then set `AI_GATEWAY_API_KEY` in Convex + Vercel.
+   configured in `.env.local`. Auth JWT keys + `CONVEX_SITE_URL` are set on the
+   deployment via `npx @convex-dev/auth`. For cloud, run `npx convex dev` to link a
+   project and re-run the auth initializer. The current AI runtime is Next Route
+   Handler based, so set `AI_GATEWAY_API_KEY` locally or rely on Vercel OIDC in
+   production rather than putting the key in Convex.
 
 5. **Usage/cost numbers are display estimates** (`convex/model/usage.ts`); AI Gateway
    is the authoritative source of spend. Telemetry (`lib/telemetry.ts`) redacts
@@ -60,14 +67,15 @@ CONVEX_AGENT_MODE=anonymous npx convex dev
 pnpm dev
 ```
 
-Set `AI_GATEWAY_API_KEY` in `.env.local` (and in the Convex deployment env if AI is
-called from Convex) to enable real voice + chat. Without it, the UI runs and
-gracefully reports that AI is not configured. Sign up with `solsymbaiex@gmail.com`
-to land as admin. Seed demo dashboard data with `npx convex run seed:seedDemoData`
-while signed in as that admin (or from the Convex dashboard).
+Set `AI_GATEWAY_API_KEY` in `.env.local` to enable real voice + chat locally.
+Production Vercel deployments can use OIDC instead. Without Gateway auth, the UI
+runs and gracefully reports that AI is not configured. Sign up with
+`solsymbaiex@gmail.com` to land as admin. Seed demo dashboard data with
+`npx convex run seed:seedDemoData` while signed in as that admin (or from the
+Convex dashboard).
 
 ## Tests
 
 `pnpm test` (vitest + convex-test): unauthenticated/cross-user Convex authorization,
-public-settings access, route input validation, and pure helpers (permissions,
-usage limits, tool registry client-safe projection).
+public-settings access, voice transcript idempotence, route input validation, and
+pure helpers (permissions, usage limits, tool registry client-safe projection).

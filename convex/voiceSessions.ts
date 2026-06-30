@@ -21,6 +21,11 @@ const statusValidator = v.union(
   v.literal("failed"),
 );
 
+function metadataRecord(value: unknown): Record<string, unknown> {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return {};
+  return value as Record<string, unknown>;
+}
+
 /** Create a voice session bound to a conversation the caller owns. */
 export const create = mutation({
   args: {
@@ -66,6 +71,36 @@ export const updateStatus = mutation({
       status,
       ...(errorCode ? { errorCode } : {}),
       ...(errorMessage ? { errorMessage } : {}),
+    });
+    return { ok: true };
+  },
+});
+
+/** Store the short-lived server-minted grant used by realtime tool callbacks. */
+export const setRealtimeToolGrant = mutation({
+  args: {
+    voiceSessionId: v.id("voiceSessions"),
+    grantHash: v.string(),
+    expiresAtMs: v.number(),
+    issuedAtMs: v.number(),
+  },
+  handler: async (ctx, args) => {
+    const user = await requireUser(ctx);
+    const session = await ctx.db.get(args.voiceSessionId);
+    if (!session) throw new Error("Session not found");
+    assertOwnerOrAdmin(user, session.userId);
+    if (session.status === "ended" || session.status === "failed") {
+      throw new Error("Session is already closed");
+    }
+    await ctx.db.patch(args.voiceSessionId, {
+      metadata: {
+        ...metadataRecord(session.metadata),
+        realtimeToolGrant: {
+          expiresAtMs: args.expiresAtMs,
+          hash: args.grantHash,
+          issuedAtMs: args.issuedAtMs,
+        },
+      },
     });
     return { ok: true };
   },

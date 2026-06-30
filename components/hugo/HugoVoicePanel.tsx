@@ -28,6 +28,10 @@ interface VoiceSessionStartResponse {
   voiceSessionId: string;
   conversationId: string;
   model: string;
+  sessionConfig: {
+    instructions: string;
+    voice: string;
+  };
   voice: string;
 }
 
@@ -75,9 +79,8 @@ export function HugoVoicePanel({
   const [session, setSession] = useState<HugoRealtimeSession | null>(null);
   const [isStarting, setIsStarting] = useState(false);
 
-  const appendMessage = useMutation(api.messages.append);
+  const appendVoiceTurn = useMutation(api.messages.appendVoiceTurn);
   const persistedIds = useRef<Set<string>>(new Set());
-  const turnCount = useRef(0);
 
   const rt = useHugoRealtime(session);
 
@@ -102,7 +105,7 @@ export function HugoVoicePanel({
   // dedupe lock is added after a turn is finalized, so we store the complete
   // turn text — not the first streamed fragment.
   const flushTurns = useCallback(
-    (conversationId: string) => {
+    (activeSession: HugoRealtimeSession) => {
       for (const raw of messagesRef.current as RealtimeTurnLike[]) {
         const id = raw.id;
         const role = raw.role;
@@ -113,11 +116,10 @@ export function HugoVoicePanel({
         if (!text) continue;
 
         persistedIds.current.add(id);
-        turnCount.current += 1;
-        void appendMessage({
-          conversationId: conversationId as Id<"conversations">,
+        void appendVoiceTurn({
+          voiceSessionId: activeSession.voiceSessionId as Id<"voiceSessions">,
+          sourceId: id,
           role,
-          modality: "audio",
           content: text,
         }).catch(() => {
           // Best-effort — drop the lock so a later pass can retry.
@@ -125,12 +127,12 @@ export function HugoVoicePanel({
         });
       }
     },
-    [appendMessage],
+    [appendVoiceTurn],
   );
 
   useEffect(() => {
     if (!session) return;
-    flushTurns(session.conversationId);
+    flushTurns(session);
   }, [rt.messages, session, flushTurns]);
 
   const startSession = useCallback(async () => {
@@ -148,11 +150,11 @@ export function HugoVoicePanel({
       }
       const data = (await res.json()) as VoiceSessionStartResponse;
       persistedIds.current = new Set();
-      turnCount.current = 0;
       reportedError.current = null;
       setSession({
         voiceSessionId: data.voiceSessionId,
         conversationId: data.conversationId,
+        instructions: data.sessionConfig.instructions,
         model: data.model,
         voice: data.voice,
       });
@@ -193,7 +195,7 @@ export function HugoVoicePanel({
     const active = session;
     // Flush any finalized-but-unpersisted turns BEFORE tearing down, so the last
     // turn isn't lost when switching to text mid-session.
-    if (active) flushTurns(active.conversationId);
+    if (active) flushTurns(active);
     rt.disconnect();
     setSession(null);
     connectedFor.current = null;
@@ -205,7 +207,6 @@ export function HugoVoicePanel({
         body: JSON.stringify({
           voiceSessionId: active.voiceSessionId,
           conversationId: active.conversationId,
-          turnCount: turnCount.current,
           interruptionCount: 0,
         }),
       });

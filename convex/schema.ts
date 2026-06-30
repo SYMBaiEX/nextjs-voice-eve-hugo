@@ -100,6 +100,7 @@ export default defineSchema({
     ),
     content: v.string(),
     transcript: v.optional(v.string()),
+    sourceId: v.optional(v.string()),
     toolName: v.optional(v.string()),
     toolCallId: v.optional(v.string()),
     metadata: v.optional(v.any()),
@@ -107,6 +108,7 @@ export default defineSchema({
   })
     .index("by_conversation", ["conversationId"])
     .index("by_conversation_created", ["conversationId", "createdAt"])
+    .index("by_conversation_source", ["conversationId", "sourceId"])
     .index("by_user", ["userId"]),
 
   voiceSessions: defineTable({

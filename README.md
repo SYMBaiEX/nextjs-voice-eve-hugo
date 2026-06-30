@@ -21,13 +21,13 @@
 
 Hugo is a realtime AI voice agent you can talk to — speak naturally, interrupt freely, and continue the same conversation in text. Under the hood it is a complete showcase of the modern Vercel AI stack: realtime voice over the **Vercel AI Gateway**, an agent authored with **Eve** (Vercel's filesystem-first agent framework), realtime data and auth in **Convex**, all wrapped in a **Next.js 16** App Router app with React Server Components.
 
-It ships with everything a real product needs: streaming voice and text, conversation history, per-user memory, usage and cost tracking with daily limits, a full 9-page admin dashboard, telemetry with secret redaction, strict per-user authorization, and an audio-reactive Anime.js "command orb" with 10 visual states.
+It ships with everything a real product needs: streaming voice and text, conversation history, per-user memory, usage and cost tracking with daily limits, a full 9-page admin dashboard, telemetry with secret redaction, strict per-user authorization, and an audio-reactive Anime.js "command orb" with runtime and reserved visual states.
 
 ## Demo
 
 > **Screenshots / demo coming soon.**
 >
-> - **The orb** (`/`) — the audio-reactive Hugo command orb. Click to start a realtime voice session; watch it move through `idle → connecting → listening → thinking → speaking` with barge-in support.
+> - **The orb** (`/`) — the audio-reactive Hugo command orb. Click to start a realtime voice session; watch it move through `idle → connecting → listening → speaking/error` with barge-in support.
 > - **Chat** (`/chat`) — streaming text chat with the same agent, full conversation persistence.
 > - **Admin** (`/admin`) — the 9-page operator dashboard: users, conversations, voice sessions, usage/cost, agent events, tool calls, settings, and audit logs.
 
@@ -38,9 +38,9 @@ It ships with everything a real product needs: streaming voice and text, convers
 ### Voice
 - Realtime, low-latency voice via the **Vercel AI Gateway** (`experimental_useRealtime` on the client, server-minted tokens on the server).
 - Server-side VAD (voice activity detection) and **barge-in** — interrupt Hugo mid-sentence.
-- Live transcript persistence; every voice session is recorded as a conversation.
+- Finalized voice transcript turns persist to the conversation ledger; voice usage is metered server-side from session duration.
 - Graceful **fallback to text** when AI is not configured or token minting fails.
-- Audio-reactive **Anime.js orb** with 10 states (`idle`, `auth_required`, `connecting`, `listening`, `thinking`, `speaking`, `interrupted`, `tool_running`, `error`, `sleeping`), honoring `prefers-reduced-motion`.
+- Audio-reactive **Anime.js orb** with active runtime states plus reserved visual states (`idle`, `auth_required`, `connecting`, `listening`, `thinking`, `speaking`, `interrupted`, `tool_running`, `error`, `sleeping`), honoring `prefers-reduced-motion`.
 
 ### Chat
 - Streaming text chat backed by the same Hugo agent (AI SDK v7).
@@ -57,7 +57,7 @@ It ships with everything a real product needs: streaming voice and text, convers
 ### Security
 - All authorization is enforced **server-side in Convex** — the client `userId` is never trusted.
 - The AI Gateway key **never reaches the browser**; the client only ever receives short-lived realtime tokens.
-- Per-user data isolation, daily usage limits, per-user rate limiting on token minting, and secret redaction in telemetry and tool I/O.
+- Per-user data isolation, daily usage limits, per-user rate limiting on token minting and realtime tool execution, short-lived session-bound tool grants, and secret redaction in telemetry and tool I/O.
 
 ---
 
@@ -86,6 +86,7 @@ Next.js 16 App Router  ───────────────────
    • proxy.ts            route-level auth gate (Convex Auth)
    • /api/voice/session  start/end a voice session (auth + daily limit)
    • /api/realtime/token mints a SHORT-LIVED gateway token (key stays server-side)
+   • /api/realtime/tool  executes server-side tools with a short-lived session grant
    • /api/chat           streams the agent's text reply
    • /api/agent/hugo     in-process Hugo agent run (AI SDK v7)
    ▼
@@ -100,7 +101,7 @@ Convex (realtime DB + auth)
 Vercel AI Gateway → model (realtime voice + text)
 ```
 
-The browser talks to Next.js Route Handlers, never to the model directly. Route Handlers carry the authenticated user's Convex JWT into every backend call, so Convex enforces the same per-user authorization everywhere. The realtime token route mints a short-lived gateway token server-side and returns only `{ token, url }` — the gateway key stays on the server.
+The browser talks to Next.js Route Handlers for application state and tool execution. Route Handlers carry the authenticated user's Convex JWT into every backend call, so Convex enforces the same per-user authorization everywhere. The realtime token route mints a short-lived gateway token server-side, returns a client-safe setup envelope, and sets an HttpOnly same-site grant cookie used only for realtime tool callbacks — the gateway key stays on the server.
 
 ### Why Eve / why in-process
 
@@ -154,7 +155,7 @@ Realtime voice and text chat require a Vercel AI Gateway key. Add it to `.env.lo
 AI_GATEWAY_API_KEY=your-gateway-key
 ```
 
-In production on Vercel, OIDC auth means **no key is needed** — the gateway authenticates the deployment automatically. Without a key locally, the UI still runs and gracefully reports that AI is not configured.
+In production on Vercel, OIDC auth means **no key is needed** — the gateway authenticates the deployment automatically, and the admin health check uses the same runtime detection. Without a key locally, the UI still runs and gracefully reports that AI is not configured.
 
 ### Seed demo data (optional)
 
@@ -186,7 +187,7 @@ All real values live only in `.env.local` (gitignored). `.env.example` holds bla
 | `DAILY_TEXT_MESSAGES_LIMIT` | — | Per-user daily text messages cap (default `200`). |
 | `HUGO_RECORD_PROMPTS` | — | When `true`, records prompts/outputs for admin debugging only. Off by default. |
 
-> Some values (`SITE_URL`, `JWT_PRIVATE_KEY` / `JWKS`, and `AI_GATEWAY_API_KEY` if AI runs from Convex actions) are set on the **Convex deployment** via `npx convex env set` / `npx @convex-dev/auth`, not in `.env.local`.
+> Some values (`CONVEX_SITE_URL` and `JWT_PRIVATE_KEY` / `JWKS`) are set on the **Convex deployment** via `npx convex env set` / `npx @convex-dev/auth`, not in `.env.local`. The current AI runtime calls Gateway from Next.js Route Handlers, so `AI_GATEWAY_API_KEY` belongs in `.env.local`/Vercel env unless you later move AI calls into Convex actions.
 
 ---
 
@@ -212,7 +213,7 @@ All real values live only in `.env.local` (gitignored). `.env.example` holds bla
 
 Hugo deploys to **Vercel** (frontend + Route Handlers) with **Convex Cloud** as the backend.
 
-1. **Provision Convex.** Run `npx convex deploy` (or `pnpm convex:deploy`) to push functions to a production deployment. Set deployment env on Convex: `SITE_URL`, auth keys via `npx @convex-dev/auth`, and `AI_GATEWAY_API_KEY` if AI runs from Convex actions.
+1. **Provision Convex.** Run `npx convex deploy` (or `pnpm convex:deploy`) to push functions to a production deployment. Set deployment env on Convex: `CONVEX_SITE_URL` and auth keys via `npx @convex-dev/auth`.
 2. **Set Vercel env vars.** Add `NEXT_PUBLIC_CONVEX_URL`, `NEXT_PUBLIC_CONVEX_SITE_URL`, `CONVEX_DEPLOYMENT`, `NEXT_PUBLIC_APP_URL`, and the model/limit defaults. With **Vercel OIDC**, no gateway key is required for the AI Gateway in production.
 3. **Deploy the frontend.** `vercel deploy --prod`, or connect the GitHub repo to a Vercel project for **automatic deploys** on every push to `main`.
 

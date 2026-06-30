@@ -1,19 +1,28 @@
 import { NextResponse } from "next/server";
+import { z } from "zod";
 import { fetchMutation, fetchQuery, authToken } from "@/lib/convex-server";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
-import { getRealtimeModel, getDefaultVoice, isAiConfigured } from "@/lib/ai";
+import {
+  buildHugoSystemPrompt,
+  getRealtimeModel,
+  getDefaultVoice,
+  isAiConfigured,
+} from "@/lib/ai";
 import { clientSafeTools } from "@/agent/hugo/tools/registry";
 import { isVoiceLimitReached } from "@/lib/usage";
 import { track } from "@/lib/telemetry";
 import { rateLimit } from "@/lib/rate-limit";
 import { REALTIME_TOKEN_RATE } from "@/lib/constants";
+import { routeErrorMessage, statusFromConvexError } from "@/lib/route-errors";
 
 const NO_STORE_HEADERS = {
   "Cache-Control": "no-store",
   "Vercel-CDN-Cache-Control": "no-store",
   "CDN-Cache-Control": "no-store",
 } as const;
+
+const Body = z.object({ conversationId: z.string().optional() });
 
 /**
  * POST /api/voice/session/start (PRD 5.4, 5.11)
@@ -31,12 +40,14 @@ export async function POST(req: Request) {
     );
   }
 
-  let body: { conversationId?: string } = {};
-  try {
-    body = await req.json();
-  } catch {
-    /* empty body is fine */
+  const parsedBody = Body.safeParse(await req.json().catch(() => ({})));
+  if (!parsedBody.success) {
+    return NextResponse.json(
+      { error: "Invalid voice session request." },
+      { status: 400, headers: NO_STORE_HEADERS },
+    );
   }
+  const body = parsedBody.data;
 
   const me = await fetchQuery(api.users.currentUser, {}, { token });
   if (!me) {
@@ -99,22 +110,45 @@ export async function POST(req: Request) {
 
   // Reuse the provided conversation or open a fresh voice conversation.
   let conversationId = body.conversationId as Id<"conversations"> | undefined;
-  if (!conversationId) {
-    conversationId = await fetchMutation(
-      api.conversations.create,
-      { title: "Voice session", mode: "voice" },
-      { token },
-    );
-  }
-
   const model = getRealtimeModel(runtime?.defaultRealtimeModel);
   const voice = getDefaultVoice(runtime?.defaultVoice);
 
-  const voiceSessionId = await fetchMutation(
-    api.voiceSessions.create,
-    { conversationId, provider: "ai-gateway", model, voice },
-    { token },
+  let voiceSessionId: Id<"voiceSessions">;
+  try {
+    if (!conversationId) {
+      conversationId = await fetchMutation(
+        api.conversations.create,
+        { title: "Voice session", mode: "voice" },
+        { token },
+      );
+    }
+
+    voiceSessionId = await fetchMutation(
+      api.voiceSessions.create,
+      { conversationId, provider: "ai-gateway", model, voice },
+      { token },
+    );
+  } catch (err) {
+    const message = routeErrorMessage(err, "Could not start voice session.");
+    track("voice_session_start_failed", {
+      error: message,
+      userId: me._id,
+    });
+    return NextResponse.json(
+      { error: "Could not start voice session." },
+      { status: statusFromConvexError(err), headers: NO_STORE_HEADERS },
+    );
+  }
+
+  const memories = await fetchQuery(api.memories.listOwn, {}, { token }).catch(
+    () => [] as { key: string; value: string }[],
   );
+  const instructions = buildHugoSystemPrompt({
+    mode: "voice",
+    userName: me.name,
+    role: me.role,
+    memories: memories.map((m) => ({ key: m.key, value: m.value })),
+  });
 
   await fetchMutation(
     api.agentEvents.log,
@@ -141,8 +175,13 @@ export async function POST(req: Request) {
       voiceSessionId,
       model,
       voice,
-      sessionConfig: { voice, turnDetection: { type: "server-vad" } },
-      tools: clientSafeTools("user"),
+      sessionConfig: {
+        inputAudioTranscription: {},
+        instructions,
+        voice,
+        turnDetection: { type: "server-vad" },
+      },
+      tools: clientSafeTools(me.role),
     },
     { headers: NO_STORE_HEADERS },
   );

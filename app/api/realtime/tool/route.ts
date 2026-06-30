@@ -1,10 +1,20 @@
 import { NextResponse } from "next/server";
+import { cookies } from "next/headers";
 import { z } from "zod";
-import { fetchQuery, authToken } from "@/lib/convex-server";
+import { fetchMutation, fetchQuery, authToken } from "@/lib/convex-server";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
 import { track } from "@/lib/telemetry";
 import { buildHugoTools } from "@/agent/hugo/tools";
+import { rateLimit } from "@/lib/rate-limit";
+import { REALTIME_TOOL_RATE } from "@/lib/constants";
+import {
+  decodeRealtimeToolGrantCookie,
+  isRealtimeToolGrantValid,
+  readRealtimeToolGrantMetadata,
+  REALTIME_TOOL_GRANT_COOKIE,
+} from "@/lib/realtime-grants";
+import { routeErrorMessage, statusFromConvexError } from "@/lib/route-errors";
 
 const Body = z.object({
   args: z.unknown().optional(),
@@ -83,15 +93,83 @@ export async function POST(req: Request) {
   }
 
   const { args, toolCallId, toolName, voiceSessionId } = parsed.data;
-  const session = await fetchQuery(
-    api.voiceSessions.getOwn,
-    { voiceSessionId: voiceSessionId as Id<"voiceSessions"> },
-    { token },
-  );
+  let session;
+  try {
+    session = await fetchQuery(
+      api.voiceSessions.getOwn,
+      { voiceSessionId: voiceSessionId as Id<"voiceSessions"> },
+      { token },
+    );
+  } catch (err) {
+    const message = routeErrorMessage(err, "Failed to validate voice session.");
+    track("realtime_tool_session_lookup_failed", {
+      error: message,
+      toolCallId,
+      toolName,
+      voiceSessionId,
+    });
+    return NextResponse.json(
+      { error: "Could not validate voice session." },
+      { status: statusFromConvexError(err), headers: NO_STORE_HEADERS },
+    );
+  }
   if (!session) {
     return NextResponse.json(
       { error: "Voice session not found." },
       { status: 404, headers: NO_STORE_HEADERS },
+    );
+  }
+  if (session.status !== "connecting" && session.status !== "active") {
+    return NextResponse.json(
+      { error: "Voice session is not active." },
+      { status: 409, headers: NO_STORE_HEADERS },
+    );
+  }
+
+  const grantCookie = decodeRealtimeToolGrantCookie(
+    (await cookies()).get(REALTIME_TOOL_GRANT_COOKIE)?.value,
+  );
+  const grantMatchesSession = grantCookie?.voiceSessionId === voiceSessionId;
+  const grantValid =
+    grantMatchesSession &&
+    isRealtimeToolGrantValid({
+      grant: grantCookie.grant,
+      metadata: readRealtimeToolGrantMetadata(session),
+    });
+  if (!grantValid) {
+    track("realtime_tool_grant_rejected", {
+      toolCallId,
+      toolName,
+      userId: me._id,
+      voiceSessionId,
+    });
+    return NextResponse.json(
+      { error: "Realtime tool grant is missing or expired." },
+      { status: 403, headers: NO_STORE_HEADERS },
+    );
+  }
+
+  const limit = rateLimit(
+    `realtime-tool:${me._id}:${voiceSessionId}`,
+    REALTIME_TOOL_RATE.max,
+    REALTIME_TOOL_RATE.windowMs,
+  );
+  if (!limit.ok) {
+    track("realtime_tool_rate_limited", {
+      toolCallId,
+      toolName,
+      userId: me._id,
+      voiceSessionId,
+    });
+    return NextResponse.json(
+      { error: "Too many realtime tool calls. Slow down a moment." },
+      {
+        status: 429,
+        headers: {
+          ...NO_STORE_HEADERS,
+          "Retry-After": String(Math.ceil(limit.retryAfterMs / 1000)),
+        },
+      },
     );
   }
 
@@ -130,6 +208,19 @@ export async function POST(req: Request) {
       userId: me._id,
       voiceSessionId,
     });
+    await fetchMutation(
+      api.usageEvents.log,
+      {
+        type: "tool_call",
+        conversationId: session.conversationId,
+        voiceSessionId: voiceSessionId as Id<"voiceSessions">,
+        provider: "ai-gateway",
+        model: session.model,
+        latencyMs: Date.now() - startedAt,
+        estimatedCost: 0,
+      },
+      { token },
+    ).catch(() => {});
     return NextResponse.json(output ?? null, { headers: NO_STORE_HEADERS });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Tool execution failed.";

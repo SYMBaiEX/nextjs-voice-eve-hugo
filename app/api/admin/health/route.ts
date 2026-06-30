@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { fetchQuery, authToken } from "@/lib/convex-server";
 import { api } from "@/convex/_generated/api";
+import { isAiConfigured } from "@/lib/ai";
 
 export const dynamic = "force-dynamic";
 
@@ -29,7 +30,7 @@ export async function GET() {
       {
         ok: true,
         time: health.time,
-        gatewayConfigured: !!process.env.AI_GATEWAY_API_KEY,
+        gatewayConfigured: isAiConfigured(),
       },
       { headers: HEALTH_RESPONSE_HEADERS },
     );

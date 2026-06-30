@@ -25,6 +25,7 @@ import type { HugoOrbState } from "@/lib/types";
 export interface HugoRealtimeSession {
   voiceSessionId: string;
   conversationId: string;
+  instructions: string;
   model: string;
   voice: string;
 }
@@ -53,6 +54,8 @@ const LEVEL_STATE_INTERVAL_MS = 55;
 // Per-frame smoothing factor toward the instantaneous target (lerp t).
 const LEVEL_ATTACK = 0.35;
 const LEVEL_DECAY = 0.12;
+const FALLBACK_REALTIME_INSTRUCTIONS =
+  "You are Hugo, a concise realtime voice agent. Speak in short natural turns, use tools only when helpful, and recover gracefully from errors.";
 
 export function useHugoRealtime(
   session: HugoRealtimeSession | null,
@@ -86,16 +89,27 @@ export function useHugoRealtime(
     ? `/api/realtime/token?session=${encodeURIComponent(session.voiceSessionId)}`
     : "/api/realtime/token";
 
+  const sessionConfig = useMemo(
+    () => ({
+      inputAudioTranscription: {},
+      instructions: session?.instructions ?? FALLBACK_REALTIME_INSTRUCTIONS,
+      voice: session?.voice ?? "alloy",
+      turnDetection: { type: "server-vad" as const },
+    }),
+    [session?.instructions, session?.voice],
+  );
+
   const realtime = useRealtime({
     model,
     api: { token: tokenEndpoint },
     onToolCall: async ({ toolCall }) => {
       if (!session) {
-        throw new Error("A voice session is required to run Hugo tools.");
+        return { error: "A voice session is required to run Hugo tools." };
       }
 
       const response = await fetch("/api/realtime/tool", {
         method: "POST",
+        credentials: "same-origin",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           args: toolCall.args,
@@ -109,15 +123,12 @@ export function useHugoRealtime(
         const payload = (await response.json().catch(() => null)) as {
           error?: string;
         } | null;
-        throw new Error(payload?.error ?? "Realtime tool execution failed.");
+        return { error: payload?.error ?? "Realtime tool execution failed." };
       }
 
       return await response.json();
     },
-    sessionConfig: {
-      voice: session?.voice ?? "alloy",
-      turnDetection: { type: "server-vad" },
-    },
+    sessionConfig,
     onError: (e: Error) => setError(e.message),
   });
 

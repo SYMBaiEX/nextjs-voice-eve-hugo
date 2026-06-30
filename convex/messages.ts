@@ -52,6 +52,7 @@ export const append = mutation({
     modality: v.optional(modalityValidator),
     content: v.string(),
     transcript: v.optional(v.string()),
+    sourceId: v.optional(v.string()),
     toolName: v.optional(v.string()),
     toolCallId: v.optional(v.string()),
     metadata: v.optional(v.any()),
@@ -70,6 +71,7 @@ export const append = mutation({
       modality: args.modality ?? "text",
       content: args.content,
       transcript: args.transcript,
+      sourceId: args.sourceId,
       toolName: args.toolName,
       toolCallId: args.toolCallId,
       metadata: args.metadata,
@@ -85,6 +87,77 @@ export const append = mutation({
       patch.title = args.content.slice(0, 60) || convo.title;
     }
     await ctx.db.patch(args.conversationId, patch);
+
+    return messageId;
+  },
+});
+
+/** Append a finalized realtime voice transcript turn once per SDK message id. */
+export const appendVoiceTurn = mutation({
+  args: {
+    voiceSessionId: v.id("voiceSessions"),
+    sourceId: v.string(),
+    role: v.union(v.literal("user"), v.literal("assistant")),
+    content: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const user = await requireUser(ctx);
+    const session = await ctx.db.get(args.voiceSessionId);
+    if (!session) throw new Error("Session not found");
+    assertOwnerOrAdmin(user, session.userId);
+    if (session.status === "ended" || session.status === "failed") {
+      throw new Error("Session is already closed");
+    }
+
+    const content = args.content.trim();
+    if (!content) throw new Error("Message content is required");
+
+    const existing = await ctx.db
+      .query("messages")
+      .withIndex("by_conversation_source", (q) =>
+        q.eq("conversationId", session.conversationId).eq("sourceId", args.sourceId),
+      )
+      .unique();
+    if (existing) return existing._id;
+
+    const convo = await ctx.db.get(session.conversationId);
+    if (!convo) throw new Error("Conversation not found");
+    assertOwnerOrAdmin(user, convo.userId);
+
+    const now = Date.now();
+    const messageId = await ctx.db.insert("messages", {
+      conversationId: session.conversationId,
+      userId: session.userId,
+      role: args.role,
+      modality: "audio",
+      content,
+      transcript: content,
+      sourceId: args.sourceId,
+      metadata: {
+        source: "ai-sdk-realtime",
+        voiceSessionId: args.voiceSessionId,
+      },
+      createdAt: now,
+    });
+
+    const patch: Record<string, unknown> = {
+      lastMessageAt: now,
+      updatedAt: now,
+    };
+    if (
+      args.role === "user" &&
+      (convo.title === "Voice session" || convo.title === "New conversation")
+    ) {
+      patch.title = content.slice(0, 60) || convo.title;
+    }
+    await ctx.db.patch(session.conversationId, patch);
+
+    if (args.role === "user") {
+      await ctx.db.patch(args.voiceSessionId, {
+        status: "active",
+        turnCount: session.turnCount + 1,
+      });
+    }
 
     return messageId;
   },
