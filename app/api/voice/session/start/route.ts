@@ -9,6 +9,7 @@ import {
   getDefaultVoice,
   isAiConfigured,
 } from "@/lib/ai";
+import { resolveRealtimeModel } from "@/lib/model-catalog";
 import { clientSafeTools } from "@/agent/hugo/tools/registry";
 import { isVoiceLimitReached } from "@/lib/usage";
 import { track } from "@/lib/telemetry";
@@ -110,9 +111,13 @@ export async function POST(req: Request) {
 
   // Reuse the provided conversation or open a fresh voice conversation.
   let conversationId = body.conversationId as Id<"conversations"> | undefined;
-  // Per-user realtime model preference wins, then admin/global default, then env.
-  const model = getRealtimeModel(
-    me.preferences?.preferredRealtimeModel ?? runtime?.defaultRealtimeModel,
+  // Per-user realtime model preference wins, then admin/global default, then
+  // env — resolved against the gateway catalog so a bad id can't break the
+  // session.
+  const model = await resolveRealtimeModel(
+    getRealtimeModel(
+      me.preferences?.preferredRealtimeModel ?? runtime?.defaultRealtimeModel,
+    ),
   );
   const voice = getDefaultVoice(runtime?.defaultVoice);
 

@@ -18,6 +18,7 @@ import {
   getTextModel,
   isAiConfigured,
 } from "@/lib/ai";
+import { resolveTextModel } from "@/lib/model-catalog";
 import { hugoTelemetry, track } from "@/lib/telemetry";
 import { isTextLimitReached } from "@/lib/usage";
 import { rateLimit } from "@/lib/rate-limit";
@@ -173,9 +174,11 @@ export async function POST(req: Request) {
   });
 
   const startedAt = Date.now();
-  // Per-user model preference wins, then the admin/global default, then env.
-  const model = getTextModel(
-    me.preferences?.preferredTextModel ?? runtime?.defaultTextModel,
+  // Per-user model preference wins, then the admin/global default, then env —
+  // resolved against the gateway catalog so a bad/typo'd model id falls back to
+  // a known-good one instead of 404-ing the request.
+  const model = await resolveTextModel(
+    getTextModel(me.preferences?.preferredTextModel ?? runtime?.defaultTextModel),
   );
   const callSettings = getHugoTextCallSettings("chat");
 
