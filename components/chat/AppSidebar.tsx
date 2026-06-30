@@ -110,7 +110,7 @@ export function AppSidebar({
       >
         {!collapsed && (
           <div className="flex-1 pl-1">
-            <Logo />
+            <Logo href="/chat" />
           </div>
         )}
         {/* Desktop collapse toggle */}

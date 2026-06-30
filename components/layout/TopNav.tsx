@@ -177,6 +177,7 @@ function UserMenu() {
 export function TopNav() {
   const rowRef = useRef<HTMLDivElement>(null);
   const reducedMotion = useReducedMotion();
+  const { isAuthenticated } = useAuthTransition();
 
   useEffect(() => {
     const row = rowRef.current;
@@ -206,7 +207,7 @@ export function TopNav() {
         ref={rowRef}
         className="mx-auto flex h-14 w-full max-w-6xl items-center justify-between gap-4 px-4 sm:px-6"
       >
-        <Logo />
+        <Logo href={isAuthenticated ? "/chat" : "/"} />
         <nav className="flex items-center gap-2" aria-label="Account and theme">
           <ThemeToggle />
           {/* AuthLoading reserves the account-control slot so the nav row width

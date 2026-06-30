@@ -1,9 +1,11 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useMutation, useQuery } from "convex/react";
 import {
+  ArrowLeft,
   Brain,
   Check,
   ExternalLink,
@@ -273,6 +275,17 @@ export function SettingsClient() {
 
   return (
     <div className="flex flex-col gap-6">
+      {/* Exit back to the chat experience */}
+      <div>
+        <Link
+          href="/chat"
+          className="inline-flex items-center gap-1.5 text-sm text-text-secondary transition-colors hover:text-text-primary"
+        >
+          <ArrowLeft aria-hidden className="size-4" />
+          Exit settings
+        </Link>
+      </div>
+
       <div className="flex flex-col gap-1">
         <h1 className="text-lg font-semibold tracking-tight text-text-primary">
           Settings
@@ -281,6 +294,58 @@ export function SettingsClient() {
           Your profile, voice preferences, usage, and what Hugo remembers.
         </p>
       </div>
+
+      {/* AI Gateway key (BYOK) — surfaced first so users can connect their key */}
+      <Card className="animate-rise">
+        <SectionHeading
+          icon={KeyRound}
+          title="AI Gateway key"
+          description="Bring your own Vercel AI Gateway key. Your models, usage, and billing stay yours."
+        />
+        <CardContent className="flex flex-col gap-3">
+          {me === undefined ? (
+            <Skeleton className="h-9 w-full" />
+          ) : me?.role === "admin" ? (
+            <p className="text-sm text-text-muted">
+              You’re an admin — Hugo uses the platform server key for your
+              account, so no personal key is required.
+            </p>
+          ) : (
+            <>
+              <div className="flex items-center justify-between gap-3">
+                <span className="text-sm text-text-secondary">Status</span>
+                {me?.hasGatewayKey ? (
+                  <Badge variant="cyan" className="gap-1">
+                    <Check aria-hidden className="size-3" />
+                    Connected
+                  </Badge>
+                ) : (
+                  <Badge variant="muted">Not set</Badge>
+                )}
+              </div>
+              <Separator />
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <a
+                  href={AI_GATEWAY_KEYS_URL}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1 text-xs text-hugo-cyan hover:underline"
+                >
+                  Generate a key at vercel.com
+                  <ExternalLink aria-hidden className="size-3" />
+                </a>
+                <Button
+                  variant={me?.hasGatewayKey ? "subtle" : "primary"}
+                  size="sm"
+                  onClick={() => setKeyDialogOpen(true)}
+                >
+                  {me?.hasGatewayKey ? "Update or remove" : "Add key"}
+                </Button>
+              </div>
+            </>
+          )}
+        </CardContent>
+      </Card>
 
       {/* Profile */}
       <Card className="animate-rise">
@@ -399,58 +464,6 @@ export function SettingsClient() {
             pending={me === undefined || savingPref}
             onChange={(next) => void savePreference({ reducedMotion: next })}
           />
-        </CardContent>
-      </Card>
-
-      {/* AI Gateway key (BYOK) */}
-      <Card className="animate-rise">
-        <SectionHeading
-          icon={KeyRound}
-          title="AI Gateway key"
-          description="Bring your own Vercel AI Gateway key. Your models, usage, and billing stay yours."
-        />
-        <CardContent className="flex flex-col gap-3">
-          {me === undefined ? (
-            <Skeleton className="h-9 w-full" />
-          ) : me?.role === "admin" ? (
-            <p className="text-sm text-text-muted">
-              You’re an admin — Hugo uses the platform server key for your
-              account, so no personal key is required.
-            </p>
-          ) : (
-            <>
-              <div className="flex items-center justify-between gap-3">
-                <span className="text-sm text-text-secondary">Status</span>
-                {me?.hasGatewayKey ? (
-                  <Badge variant="cyan" className="gap-1">
-                    <Check aria-hidden className="size-3" />
-                    Connected
-                  </Badge>
-                ) : (
-                  <Badge variant="muted">Not set</Badge>
-                )}
-              </div>
-              <Separator />
-              <div className="flex flex-wrap items-center justify-between gap-3">
-                <a
-                  href={AI_GATEWAY_KEYS_URL}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-flex items-center gap-1 text-xs text-hugo-cyan hover:underline"
-                >
-                  Generate a key at vercel.com
-                  <ExternalLink aria-hidden className="size-3" />
-                </a>
-                <Button
-                  variant={me?.hasGatewayKey ? "subtle" : "primary"}
-                  size="sm"
-                  onClick={() => setKeyDialogOpen(true)}
-                >
-                  {me?.hasGatewayKey ? "Update or remove" : "Add key"}
-                </Button>
-              </div>
-            </>
-          )}
         </CardContent>
       </Card>
 

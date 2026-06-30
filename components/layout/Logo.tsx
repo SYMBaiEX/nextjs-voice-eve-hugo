@@ -3,14 +3,21 @@ import { cn } from "@/lib/utils";
 import { APP_NAME } from "@/lib/constants";
 
 /**
- * Logo — the Hugo wordmark: a small glowing cyan dot beside the name. Links
- * home. Server component (no interactivity). Accepts className for layout.
+ * Logo — the Hugo wordmark: a small glowing cyan dot beside the name. Server
+ * component (no interactivity). `href` defaults to the landing page; signed-in
+ * surfaces pass `/chat` so the wordmark returns to the chat experience.
  */
-export function Logo({ className }: { className?: string }) {
+export function Logo({
+  className,
+  href = "/",
+}: {
+  className?: string;
+  href?: string;
+}) {
   return (
     <Link
-      href="/"
-      aria-label={`${APP_NAME} — home`}
+      href={href}
+      aria-label={href === "/" ? `${APP_NAME} — home` : `${APP_NAME} — chat`}
       className={cn(
         "group inline-flex items-center gap-2.5 rounded-md outline-none focus-visible:ring-2 focus-visible:ring-hugo-cyan/60",
         className,
