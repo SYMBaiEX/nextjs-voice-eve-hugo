@@ -5,9 +5,9 @@ import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
 import {
   buildHugoSystemPrompt,
-  getRealtimeModel,
   getDefaultVoice,
   isAiConfigured,
+  resolveUserModel,
 } from "@/lib/ai";
 import { resolveRealtimeModel } from "@/lib/model-catalog";
 import { clientSafeTools } from "@/agent/hugo/tools/registry";
@@ -111,13 +111,11 @@ export async function POST(req: Request) {
 
   // Reuse the provided conversation or open a fresh voice conversation.
   let conversationId = body.conversationId as Id<"conversations"> | undefined;
-  // Per-user realtime model preference wins, then admin/global default, then
-  // env — resolved against the gateway catalog so a bad id can't break the
+  // The user's own preference wins; the admin global default applies only to the
+  // admin. Validated against the gateway catalog so a bad id can't break the
   // session.
   const model = await resolveRealtimeModel(
-    getRealtimeModel(
-      me.preferences?.preferredRealtimeModel ?? runtime?.defaultRealtimeModel,
-    ),
+    resolveUserModel(me, runtime, "realtime"),
   );
   const voice = getDefaultVoice(runtime?.defaultVoice);
 

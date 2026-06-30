@@ -158,17 +158,51 @@ export function buildHugoGatewayProviderOptions({
   };
 }
 
+/** Hardcoded platform defaults (overridable per-deploy via env). */
+export const DEFAULT_TEXT_MODEL_ID = "minimax/minimax-m2.7";
+export const DEFAULT_REALTIME_MODEL_ID = "openai/gpt-realtime-2";
+
 /** Default models + voice, env-driven with production-safe fallbacks. */
 export function getTextModel(override?: string): string {
-  return override ?? process.env.DEFAULT_TEXT_MODEL ?? "openai/gpt-5.5";
+  return override ?? process.env.DEFAULT_TEXT_MODEL ?? DEFAULT_TEXT_MODEL_ID;
 }
 
 export function getRealtimeModel(override?: string): string {
-  return override ?? process.env.DEFAULT_REALTIME_MODEL ?? "openai/gpt-realtime-2";
+  return (
+    override ?? process.env.DEFAULT_REALTIME_MODEL ?? DEFAULT_REALTIME_MODEL_ID
+  );
 }
 
 export function getDefaultVoice(override?: string): string {
   return override ?? process.env.DEFAULT_VOICE ?? "alloy";
+}
+
+/**
+ * The model a user's request should use, before catalog validation.
+ *
+ * A user's own preference always wins. The admin's global default (from
+ * Settings) only applies to the admin account — every other user is fully
+ * independent and falls back to the platform default — so the admin's model
+ * choice never leaks onto other users (BYOK).
+ */
+export function resolveUserModel(
+  me: {
+    role?: string;
+    preferences?: {
+      preferredTextModel?: string;
+      preferredRealtimeModel?: string;
+    } | null;
+  },
+  runtime: { defaultTextModel?: string; defaultRealtimeModel?: string } | null,
+  kind: "text" | "realtime",
+): string {
+  const isAdmin = me.role === "admin";
+  if (kind === "text") {
+    const adminDefault = isAdmin ? runtime?.defaultTextModel : undefined;
+    return getTextModel(me.preferences?.preferredTextModel ?? adminDefault);
+  }
+  const adminDefault = isAdmin ? runtime?.defaultRealtimeModel : undefined;
+  return getRealtimeModel(me.preferences?.preferredRealtimeModel ?? adminDefault);
 }
 
 /**

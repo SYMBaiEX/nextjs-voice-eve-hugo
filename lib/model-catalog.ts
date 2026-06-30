@@ -29,6 +29,7 @@ const TTL_MS = 10 * 60 * 1000;
 /** Stable, widely-available fallbacks, tried in order, if a requested model
  *  isn't in the catalog. The last resort is "any available model". */
 const TEXT_FALLBACKS = [
+  "minimax/minimax-m2.7",
   "openai/gpt-5.5",
   "openai/gpt-5",
   "openai/gpt-4o",

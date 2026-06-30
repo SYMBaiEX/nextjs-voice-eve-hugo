@@ -15,8 +15,8 @@ import {
   buildHugoSystemPrompt,
   buildHugoTools,
   getHugoTextCallSettings,
-  getTextModel,
   isAiConfigured,
+  resolveUserModel,
 } from "@/lib/ai";
 import { resolveTextModel } from "@/lib/model-catalog";
 import { hugoTelemetry, track } from "@/lib/telemetry";
@@ -174,12 +174,10 @@ export async function POST(req: Request) {
   });
 
   const startedAt = Date.now();
-  // Per-user model preference wins, then the admin/global default, then env —
-  // resolved against the gateway catalog so a bad/typo'd model id falls back to
-  // a known-good one instead of 404-ing the request.
-  const model = await resolveTextModel(
-    getTextModel(me.preferences?.preferredTextModel ?? runtime?.defaultTextModel),
-  );
+  // The user's own preference wins; the admin global default applies only to the
+  // admin (every other user is independent). Then validated against the gateway
+  // catalog so a bad/typo'd id falls back to a known-good model instead of 404-ing.
+  const model = await resolveTextModel(resolveUserModel(me, runtime, "text"));
   const callSettings = getHugoTextCallSettings("chat");
 
   try {

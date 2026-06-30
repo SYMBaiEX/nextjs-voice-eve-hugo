@@ -5,7 +5,12 @@ import {
   AVAILABLE_REALTIME_MODELS,
   AVAILABLE_TEXT_MODELS,
 } from "@/lib/constants";
-import { defaultModels, getModelCatalog } from "@/lib/model-catalog";
+import { resolveUserModel } from "@/lib/ai";
+import {
+  getModelCatalog,
+  resolveRealtimeModel,
+  resolveTextModel,
+} from "@/lib/model-catalog";
 
 /**
  * GET /api/models — the selectable models for the composer.
@@ -25,20 +30,26 @@ export async function GET() {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const runtime = await fetchQuery(api.settings.getRuntime, {}, { token }).catch(
-    () => null,
-  );
-  const [defaults, catalog] = await Promise.all([
-    defaultModels(runtime),
+  const [me, runtime, catalog] = await Promise.all([
+    fetchQuery(api.users.currentUser, {}, { token }).catch(() => null),
+    fetchQuery(api.settings.getRuntime, {}, { token }).catch(() => null),
     getModelCatalog(),
+  ]);
+
+  // The default shown when a user hasn't picked: their own resolution (admin
+  // global default applies only to the admin), validated against the catalog.
+  const who = me ?? {};
+  const [defaultText, defaultRealtime] = await Promise.all([
+    resolveTextModel(resolveUserModel(who, runtime, "text")),
+    resolveRealtimeModel(resolveUserModel(who, runtime, "realtime")),
   ]);
 
   return NextResponse.json(
     {
       text: catalog?.text ?? [...AVAILABLE_TEXT_MODELS],
       realtime: catalog?.realtime ?? [...AVAILABLE_REALTIME_MODELS],
-      defaultText: defaults.text,
-      defaultRealtime: defaults.realtime,
+      defaultText,
+      defaultRealtime,
     },
     { headers: NO_STORE },
   );
