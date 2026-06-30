@@ -208,13 +208,17 @@ export function Hero({
   return (
     <section
       ref={rootRef}
-      className="relative flex flex-col items-center gap-10 text-center"
+      className="relative flex flex-col items-center gap-8 text-center sm:gap-9"
     >
       {/* Orb — a single stable instance; state + destination derive from auth
           values so it never remounts (see note above). */}
       {/* The shared app-layer orb docks here on the landing page. */}
       <div data-hero-orb data-hero-reveal style={hidden}>
-        <OrbSlot state="idle" size={280} onClick={() => router.push(orbHref)} />
+        <OrbSlot
+          state="idle"
+          size="clamp(300px, 24vw, 440px)"
+          onClick={() => router.push(orbHref)}
+        />
       </div>
 
       {/* Eyebrow */}

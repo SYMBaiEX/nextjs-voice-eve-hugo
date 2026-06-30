@@ -851,78 +851,80 @@ export function HugoOrb({
 
         {/* 6. Core sphere (group is the audio/breathing scale target). */}
         <g className="hugo-core-group" style={{ transformOrigin: "200px 200px" }}>
-          <circle cx={C} cy={C} r={64} fill="url(#hugo-liquid-depth)" filter="url(#hugo-glass-shadow)" />
-          <g clipPath="url(#hugo-liquid-clip)">
-            <g className="hugo-liquid-flow" style={{ transformOrigin: "200px 200px" }}>
+          <g transform="translate(200 200) scale(1.28) translate(-200 -200)">
+            <circle cx={C} cy={C} r={64} fill="url(#hugo-liquid-depth)" filter="url(#hugo-glass-shadow)" />
+            <g clipPath="url(#hugo-liquid-clip)">
+              <g className="hugo-liquid-flow" style={{ transformOrigin: "200px 200px" }}>
+                <path
+                  d="M 132 205 C 154 164 184 147 212 158 C 241 169 261 194 273 230"
+                  fill="none"
+                  stroke="url(#hugo-liquid-sheen)"
+                  strokeWidth={16}
+                  strokeLinecap="round"
+                  opacity={0.56}
+                  filter="url(#hugo-liquid-blur)"
+                />
+                <path
+                  d="M 143 235 C 166 210 193 200 218 206 C 241 212 258 229 270 251"
+                  fill="none"
+                  stroke="rgba(255,255,255,0.62)"
+                  strokeWidth={6}
+                  strokeLinecap="round"
+                  opacity={0.62}
+                />
+              </g>
+              <g className="hugo-liquid-counterflow" style={{ transformOrigin: "200px 200px" }}>
+                <path
+                  d="M 260 166 C 231 178 210 197 194 220 C 181 239 160 249 137 245"
+                  fill="none"
+                  stroke="url(#hugo-liquid-blue-ribbon)"
+                  strokeWidth={12}
+                  strokeLinecap="round"
+                  opacity={0.58}
+                  filter="url(#hugo-soft)"
+                />
+                <path
+                  d="M 153 164 C 180 181 197 196 203 216 C 209 238 225 252 251 258"
+                  fill="none"
+                  stroke="rgba(2,132,199,0.62)"
+                  strokeWidth={7}
+                  strokeLinecap="round"
+                  opacity={0.5}
+                />
+              </g>
               <path
-                d="M 132 205 C 154 164 184 147 212 158 C 241 169 261 194 273 230"
-                fill="none"
-                stroke="url(#hugo-liquid-sheen)"
-                strokeWidth={16}
-                strokeLinecap="round"
-                opacity={0.56}
-                filter="url(#hugo-liquid-blur)"
-              />
-              <path
-                d="M 143 235 C 166 210 193 200 218 206 C 241 212 258 229 270 251"
-                fill="none"
-                stroke="rgba(255,255,255,0.62)"
-                strokeWidth={6}
-                strokeLinecap="round"
-                opacity={0.62}
-              />
-            </g>
-            <g className="hugo-liquid-counterflow" style={{ transformOrigin: "200px 200px" }}>
-              <path
-                d="M 260 166 C 231 178 210 197 194 220 C 181 239 160 249 137 245"
-                fill="none"
-                stroke="url(#hugo-liquid-blue-ribbon)"
-                strokeWidth={12}
-                strokeLinecap="round"
-                opacity={0.58}
+                d="M 151 159 C 172 136 210 128 238 149 C 218 154 203 164 191 181 C 178 176 166 169 151 159 Z"
+                fill="rgba(255,255,255,0.5)"
+                opacity={0.68}
                 filter="url(#hugo-soft)"
               />
               <path
-                d="M 153 164 C 180 181 197 196 203 216 C 209 238 225 252 251 258"
-                fill="none"
-                stroke="rgba(2,132,199,0.62)"
-                strokeWidth={7}
-                strokeLinecap="round"
-                opacity={0.5}
+                d="M 222 238 C 238 221 257 217 272 228 C 266 249 250 263 226 270 C 232 257 231 247 222 238 Z"
+                fill="rgba(255,255,255,0.42)"
+                opacity={0.54}
+                filter="url(#hugo-soft)"
               />
             </g>
-            <path
-              d="M 151 159 C 172 136 210 128 238 149 C 218 154 203 164 191 181 C 178 176 166 169 151 159 Z"
-              fill="rgba(255,255,255,0.5)"
-              opacity={0.68}
-              filter="url(#hugo-soft)"
-            />
-            <path
-              d="M 222 238 C 238 221 257 217 272 228 C 266 249 250 263 226 270 C 232 257 231 247 222 238 Z"
-              fill="rgba(255,255,255,0.42)"
-              opacity={0.54}
-              filter="url(#hugo-soft)"
-            />
-          </g>
-          <circle cx={C} cy={C} r={64} fill="url(#hugo-liquid-rim)" />
-          <circle cx={C} cy={C} r={64} fill="none" stroke="rgba(255,255,255,0.62)" strokeWidth={1.2} opacity={0.7} />
-          <circle cx={C} cy={C} r={58} fill="url(#hugo-core-inner)" opacity={0.72} />
-          {/* Specular highlights. */}
-          <ellipse className="hugo-glass-highlight" cx={181} cy={176} rx={19} ry={12} fill="rgba(255,255,255,0.92)" filter="url(#hugo-soft)" opacity={0.82} />
-          <ellipse cx={224} cy={166} rx={18} ry={8} fill="rgba(255,255,255,0.36)" filter="url(#hugo-soft)" opacity={0.55} transform="rotate(28 224 166)" />
-          <ellipse cx={234} cy={235} rx={10} ry={23} fill="rgba(255,255,255,0.22)" filter="url(#hugo-soft)" opacity={0.5} transform="rotate(42 234 235)" />
+            <circle cx={C} cy={C} r={64} fill="url(#hugo-liquid-rim)" />
+            <circle cx={C} cy={C} r={64} fill="none" stroke="rgba(255,255,255,0.62)" strokeWidth={1.2} opacity={0.7} />
+            <circle cx={C} cy={C} r={58} fill="url(#hugo-core-inner)" opacity={0.72} />
+            {/* Specular highlights. */}
+            <ellipse className="hugo-glass-highlight" cx={181} cy={176} rx={19} ry={12} fill="rgba(255,255,255,0.92)" filter="url(#hugo-soft)" opacity={0.82} />
+            <ellipse cx={224} cy={166} rx={18} ry={8} fill="rgba(255,255,255,0.36)" filter="url(#hugo-soft)" opacity={0.55} transform="rotate(28 224 166)" />
+            <ellipse cx={234} cy={235} rx={10} ry={23} fill="rgba(255,255,255,0.22)" filter="url(#hugo-soft)" opacity={0.5} transform="rotate(42 234 235)" />
 
-          {/* 7. Waveform ribbon across the core. */}
-          <g className="hugo-wave-wrap" style={{ opacity: 0 }}>
-            <g className="hugo-wave" style={{ transformOrigin: "200px 200px" }}>
-              <path
-                className="hugo-wave-path"
-                d={WAVE_FLAT}
-                fill="none"
-                stroke="rgba(255,255,255,0.92)"
-                strokeWidth={2.5}
-                strokeLinecap="round"
-              />
+            {/* 7. Waveform ribbon across the core. */}
+            <g className="hugo-wave-wrap" style={{ opacity: 0 }}>
+              <g className="hugo-wave" style={{ transformOrigin: "200px 200px" }}>
+                <path
+                  className="hugo-wave-path"
+                  d={WAVE_FLAT}
+                  fill="none"
+                  stroke="rgba(255,255,255,0.92)"
+                  strokeWidth={2.5}
+                  strokeLinecap="round"
+                />
+              </g>
             </g>
           </g>
         </g>

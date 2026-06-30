@@ -28,11 +28,11 @@ import { useReducedMotion } from "@/components/motion/useReducedMotion";
  * Bonus: because the orb never unmounts, the SVG-motion-path teardown race
  * (getPointAtLength "inactive document") simply cannot happen here.
  *
- * The orb is rendered at BASE_SIZE and only ever scaled DOWN via transform, so
- * the SVG stays crisp and the GPU field renders at full resolution at any size.
+ * The orb is rendered at BASE_SIZE and transformed to each slot, so the SVG
+ * stays crisp even when the landing page asks for a larger hero presence.
  */
 
-const BASE_SIZE = 280;
+const BASE_SIZE = 440;
 
 const LazyHugoOrbStage = dynamic(
   () =>

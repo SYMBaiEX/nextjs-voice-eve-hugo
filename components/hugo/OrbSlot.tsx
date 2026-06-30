@@ -21,7 +21,7 @@ export function OrbSlot({
   onClick,
   className,
 }: {
-  size?: number;
+  size?: number | string;
   state?: HugoOrbState;
   audioLevel?: number;
   onClick?: () => void;
