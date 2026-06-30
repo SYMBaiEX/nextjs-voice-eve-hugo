@@ -77,18 +77,6 @@ export default async function LandingPage() {
         {/* Command surface */}
         <section className="relative px-6 pb-12">
           <div className="mx-auto w-full max-w-6xl">
-            <div className="animate-rise mb-8 flex flex-col items-center gap-3 text-center">
-              <span className="font-mono text-xs tracking-widest text-hugo-cyan">
-                THE COMMAND SURFACE
-              </span>
-              <h2 className="text-balance text-2xl font-semibold tracking-tight text-text-primary sm:text-3xl">
-                One agent. Voice, text, memory, and oversight.
-              </h2>
-              <p className="max-w-2xl text-balance text-sm text-text-secondary">
-                Hugo runs as a single coherent system — every modality shares the
-                same context, and every session is observable.
-              </p>
-            </div>
             <FeatureGrid />
           </div>
         </section>

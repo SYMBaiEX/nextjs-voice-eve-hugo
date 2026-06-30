@@ -4,11 +4,10 @@ import { useEffect, useRef } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useConvexAuth, useQuery } from "convex/react";
-import { ArrowRight, Lock, MessageSquareText, Mic } from "lucide-react";
+import { ArrowRight, MessageSquareText, Mic } from "lucide-react";
 import { createScope, createTimeline, stagger, utils, type Scope } from "animejs";
 import { OrbSlot } from "@/components/hugo/OrbSlot";
 import { buttonVariants } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { useReducedMotion } from "@/components/motion/useReducedMotion";
 import { api } from "@/convex/_generated/api";
@@ -35,11 +34,9 @@ import { api } from "@/convex/_generated/api";
 function CtaRow({
   talkHref,
   textHref,
-  showSignInHint,
 }: {
   talkHref: string;
   textHref: string;
-  showSignInHint: boolean;
 }) {
   return (
     <div className="flex flex-col items-center gap-3">
@@ -66,14 +63,6 @@ function CtaRow({
           Type instead
         </Link>
       </div>
-      {showSignInHint ? (
-        <p className="flex items-center gap-1.5 text-xs text-text-muted">
-          <Lock className="size-3" aria-hidden="true" />
-          <span>
-            Sign-in required to start a live session.
-          </span>
-        </p>
-      ) : null}
     </div>
   );
 }
@@ -163,12 +152,6 @@ export function Hero({
           duration: 900,
           ease: "out(4)",
         })
-        // Eyebrow badge.
-        .add(
-          "[data-hero-eyebrow]",
-          { opacity: [0, 1], y: [10, 0] },
-          "-=560",
-        )
         // Headline, word by word.
         .add(
           words,
@@ -222,14 +205,6 @@ export function Hero({
         />
       </div>
 
-      {/* Eyebrow */}
-      <div data-hero-eyebrow data-hero-reveal style={hidden}>
-        <Badge variant="cyan" className="px-3 py-1">
-          <span className="size-1.5 rounded-full bg-hugo-cyan shadow-[0_0_8px_var(--glow)]" />
-          REALTIME · VOICE-NATIVE
-        </Badge>
-      </div>
-
       {/* Headline + copy */}
       <div className="flex max-w-2xl flex-col items-center gap-4">
         <HeadlineWords />
@@ -254,12 +229,11 @@ export function Hero({
           first paint (no flash) and stays hydration-stable. */}
       <div data-hero-cta data-hero-reveal style={hidden}>
         {authed ? (
-          <CtaRow talkHref="/chat" textHref="/chat" showSignInHint={false} />
+          <CtaRow talkHref="/chat" textHref="/chat" />
         ) : (
           <CtaRow
             talkHref={guestHref}
             textHref={guestHref}
-            showSignInHint={!guestPreview}
           />
         )}
       </div>

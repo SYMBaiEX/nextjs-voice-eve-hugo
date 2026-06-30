@@ -105,6 +105,13 @@ const TICKS = Array.from({ length: 48 }, (_, i) => {
   return { x1: r2(x1), y1: r2(y1), x2: r2(x2), y2: r2(y2), major };
 });
 
+const HUD_ARCS = [
+  { r: 188, start: 306, sweep: 58, width: 4.4, opacity: 0.42 },
+  { r: 182, start: 38, sweep: 46, width: 2.4, opacity: 0.32 },
+  { r: 166, start: 118, sweep: 62, width: 1.6, opacity: 0.28 },
+  { r: 154, start: 210, sweep: 74, width: 1.6, opacity: 0.24 },
+];
+
 /** Outer segmented ring dash pattern (visual segments via dasharray). */
 const SEG_DASH = "26 14";
 
@@ -223,6 +230,7 @@ export function HugoOrb({
         if (reduced) return; // No spins/orbits/draw under reduced motion.
 
         // 2. Outer + inner segmented rings — slow counter-rotation.
+        animate(".hugo-depth-hud", { rotate: "-1turn", loop: true, duration: 72000, ease: "linear" });
         animate(".hugo-ring-outer", { rotate: "1turn", loop: true, duration: 48000, ease: "linear" });
         animate(".hugo-ring-inner", { rotate: "-1turn", loop: true, duration: 36000, ease: "linear" });
         utils.set(".hugo-seg", { opacity: 0.5 });
@@ -238,8 +246,25 @@ export function HugoOrb({
         // 4. Scan arcs sweep around the dial.
         animate(".hugo-scan-a", { rotate: "1turn", transformOrigin: "200px 200px", loop: true, duration: 9000, ease: "linear" });
         animate(".hugo-scan-b", { rotate: "-1turn", transformOrigin: "200px 200px", loop: true, duration: 13000, ease: "linear" });
+        animate(".hugo-depth-arc", {
+          opacity: [0.28, 0.76],
+          duration: 2600,
+          alternate: true,
+          loop: true,
+          delay: stagger(360),
+          ease: "inOutSine",
+        });
         animate(".hugo-liquid-flow", { rotate: "1turn", transformOrigin: "200px 200px", loop: true, duration: 18000, ease: "linear" });
         animate(".hugo-liquid-counterflow", { rotate: "-1turn", transformOrigin: "200px 200px", loop: true, duration: 24000, ease: "linear" });
+        animate(".hugo-liquid-caustic", {
+          opacity: [0.22, 0.72],
+          translateX: [-4, 4],
+          duration: 4200,
+          alternate: true,
+          loop: true,
+          delay: stagger(420),
+          ease: "inOutSine",
+        });
         animate(".hugo-glass-highlight", {
           opacity: [0.45, 0.9],
           duration: 3200,
@@ -719,10 +744,27 @@ export function HugoOrb({
             <stop offset="42%" stopColor={style.color} stopOpacity="0.78" />
             <stop offset="100%" stopColor="rgba(255,255,255,0.75)" />
           </linearGradient>
+          <linearGradient id="hugo-caustic-white" x1="142" y1="150" x2="258" y2="268" gradientUnits="userSpaceOnUse">
+            <stop offset="0%" stopColor="rgba(255,255,255,0.82)" />
+            <stop offset="46%" stopColor="rgba(255,255,255,0.2)" />
+            <stop offset="100%" stopColor={style.color} stopOpacity="0.55" />
+          </linearGradient>
           <radialGradient id="hugo-core-inner" cx="50%" cy="50%" r="50%">
             <stop offset="0%" stopColor="rgba(255,255,255,0.0)" />
             <stop offset="78%" stopColor="rgba(255,255,255,0.0)" />
             <stop offset="100%" stopColor={style.color} stopOpacity="0.5" />
+          </radialGradient>
+          <radialGradient id="hugo-core-floor-shadow" cx="50%" cy="45%" r="55%">
+            <stop offset="0%" stopColor="rgba(3,7,18,0.72)" />
+            <stop offset="58%" stopColor="rgba(3,7,18,0.32)" />
+            <stop offset="100%" stopColor="rgba(3,7,18,0)" />
+          </radialGradient>
+          <radialGradient id="hugo-glass-facing" cx="37%" cy="27%" r="76%">
+            <stop offset="0%" stopColor="rgba(255,255,255,0.75)" />
+            <stop offset="24%" stopColor="rgba(255,255,255,0.18)" />
+            <stop offset="58%" stopColor="rgba(255,255,255,0.04)" />
+            <stop offset="86%" stopColor={style.color} stopOpacity="0.16" />
+            <stop offset="100%" stopColor="rgba(255,255,255,0.42)" />
           </radialGradient>
           <clipPath id="hugo-liquid-clip">
             <circle cx={C} cy={C} r={64} />
@@ -733,9 +775,21 @@ export function HugoOrb({
           <filter id="hugo-liquid-blur" x="-30%" y="-30%" width="160%" height="160%">
             <feGaussianBlur stdDeviation="1.8" />
           </filter>
-          <filter id="hugo-glass-shadow" x="-40%" y="-40%" width="180%" height="180%">
-            <feDropShadow dx="0" dy="9" stdDeviation="8" floodColor="rgba(0,0,0,0.46)" />
-            <feDropShadow dx="-7" dy="-9" stdDeviation="7" floodColor="rgba(255,255,255,0.12)" />
+          <filter id="hugo-liquid-refraction" x="-35%" y="-35%" width="170%" height="170%">
+            <feTurbulence type="fractalNoise" baseFrequency="0.018 0.05" numOctaves="2" seed="7" result="noise" />
+            <feDisplacementMap in="SourceGraphic" in2="noise" scale="4" xChannelSelector="R" yChannelSelector="G" />
+          </filter>
+          <filter id="hugo-depth-glow" x="-80%" y="-80%" width="260%" height="260%">
+            <feGaussianBlur stdDeviation="4.2" result="blur" />
+            <feMerge>
+              <feMergeNode in="blur" />
+              <feMergeNode in="SourceGraphic" />
+            </feMerge>
+          </filter>
+          <filter id="hugo-glass-shadow" x="-55%" y="-55%" width="210%" height="210%">
+            <feDropShadow dx="0" dy="18" stdDeviation="13" floodColor="rgba(0,0,0,0.58)" />
+            <feDropShadow dx="0" dy="0" stdDeviation="10" floodColor={style.color} floodOpacity="0.34" />
+            <feDropShadow dx="-9" dy="-12" stdDeviation="8" floodColor="rgba(255,255,255,0.18)" />
           </filter>
           {/* Hidden waveform morph targets. */}
           <path id="hugo-wave-flat" d={WAVE_FLAT} />
@@ -746,6 +800,47 @@ export function HugoOrb({
           className="hugo-presence-distort"
           style={{ transformOrigin: "200px 200px" }}
         >
+        {/* 1c. Projected HUD depth layer — faint holographic instrument glass. */}
+        <g className="hugo-depth-hud" style={{ transformOrigin: "200px 200px" }}>
+          <ellipse
+            className="hugo-color"
+            cx={C}
+            cy={210}
+            rx={172}
+            ry={84}
+            fill="none"
+            stroke={style.color}
+            strokeWidth={0.8}
+            strokeDasharray="10 18"
+            opacity={0.2}
+          />
+          <ellipse
+            className="hugo-color"
+            cx={C}
+            cy={224}
+            rx={132}
+            ry={54}
+            fill="none"
+            stroke={style.color}
+            strokeWidth={0.75}
+            strokeDasharray="2 9"
+            opacity={0.22}
+          />
+          {HUD_ARCS.map((arc, i) => (
+            <path
+              key={`${arc.r}-${arc.start}`}
+              className="hugo-color hugo-depth-arc"
+              d={arcPath(arc.r, arc.start, arc.sweep)}
+              fill="none"
+              stroke={style.color}
+              strokeWidth={arc.width}
+              strokeLinecap="round"
+              opacity={arc.opacity}
+              filter={i === 0 ? "url(#hugo-depth-glow)" : undefined}
+            />
+          ))}
+        </g>
+
         {/* 2. Outer segmented ring. */}
         <g className="hugo-ring-outer" style={{ transformOrigin: "200px 200px" }}>
           <circle
@@ -855,9 +950,11 @@ export function HugoOrb({
 
         {/* 6. Core sphere (group is the audio/breathing scale target). */}
         <g className="hugo-core-group" style={{ transformOrigin: "200px 200px" }}>
-          <g transform="translate(200 200) scale(1.28) translate(-200 -200)">
+          <g transform="translate(200 200) scale(1.34) translate(-200 -200)">
+            <ellipse cx={204} cy={261} rx={73} ry={24} fill="url(#hugo-core-floor-shadow)" opacity={0.84} filter="url(#hugo-liquid-blur)" />
+            <circle cx={C} cy={C} r={76} fill="none" stroke={style.color} strokeWidth={1.2} opacity={0.32} filter="url(#hugo-depth-glow)" />
             <circle cx={C} cy={C} r={64} fill="url(#hugo-liquid-depth)" filter="url(#hugo-glass-shadow)" />
-            <g clipPath="url(#hugo-liquid-clip)">
+            <g clipPath="url(#hugo-liquid-clip)" filter="url(#hugo-liquid-refraction)">
               <g className="hugo-liquid-flow" style={{ transformOrigin: "200px 200px" }}>
                 <path
                   d="M 132 205 C 154 164 184 147 212 158 C 241 169 261 194 273 230"
@@ -897,6 +994,26 @@ export function HugoOrb({
                 />
               </g>
               <path
+                className="hugo-liquid-caustic"
+                d="M 132 190 C 164 174 194 174 224 189 C 245 199 266 198 282 190"
+                fill="none"
+                stroke="url(#hugo-caustic-white)"
+                strokeWidth={8}
+                strokeLinecap="round"
+                opacity={0.42}
+                filter="url(#hugo-soft)"
+              />
+              <path
+                className="hugo-liquid-caustic"
+                d="M 142 226 C 169 240 198 240 228 224 C 250 212 269 214 282 226"
+                fill="none"
+                stroke="rgba(255,255,255,0.52)"
+                strokeWidth={4.5}
+                strokeLinecap="round"
+                opacity={0.36}
+                filter="url(#hugo-soft)"
+              />
+              <path
                 d="M 151 159 C 172 136 210 128 238 149 C 218 154 203 164 191 181 C 178 176 166 169 151 159 Z"
                 fill="rgba(255,255,255,0.5)"
                 opacity={0.68}
@@ -912,6 +1029,25 @@ export function HugoOrb({
             <circle cx={C} cy={C} r={64} fill="url(#hugo-liquid-rim)" />
             <circle cx={C} cy={C} r={64} fill="none" stroke="rgba(255,255,255,0.62)" strokeWidth={1.2} opacity={0.7} />
             <circle cx={C} cy={C} r={58} fill="url(#hugo-core-inner)" opacity={0.72} />
+            <circle cx={C} cy={C} r={66} fill="url(#hugo-glass-facing)" opacity={0.82} />
+            <path
+              d={arcPath(67, 112, 156)}
+              fill="none"
+              stroke="rgba(255,255,255,0.82)"
+              strokeWidth={2.8}
+              strokeLinecap="round"
+              opacity={0.48}
+              filter="url(#hugo-soft)"
+            />
+            <path
+              d={arcPath(68, 232, 96)}
+              fill="none"
+              stroke={style.color}
+              strokeWidth={2.2}
+              strokeLinecap="round"
+              opacity={0.48}
+              filter="url(#hugo-depth-glow)"
+            />
             {/* Specular highlights. */}
             <ellipse className="hugo-glass-highlight" cx={181} cy={176} rx={19} ry={12} fill="rgba(255,255,255,0.92)" filter="url(#hugo-soft)" opacity={0.82} />
             <ellipse cx={224} cy={166} rx={18} ry={8} fill="rgba(255,255,255,0.36)" filter="url(#hugo-soft)" opacity={0.55} transform="rotate(28 224 166)" />
