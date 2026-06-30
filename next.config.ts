@@ -6,6 +6,19 @@ const nextConfig: NextConfig = {
   outputFileTracingIncludes: {
     "/api/**": ["./agent/hugo/**/*.md"],
   },
+  // The conversation history now lives in the chat sidebar; the old standalone
+  // pages redirect into the unified chat surface (a conversation opens at
+  // /chat?c=<id>).
+  async redirects() {
+    return [
+      { source: "/conversations", destination: "/chat", permanent: false },
+      {
+        source: "/conversations/:id",
+        destination: "/chat?c=:id",
+        permanent: false,
+      },
+    ];
+  },
 };
 
 export default nextConfig;

@@ -4,7 +4,6 @@ import { APP_NAME } from "@/lib/constants";
 
 const FOOTER_LINKS = [
   { href: "/chat", label: "Chat" },
-  { href: "/conversations", label: "History" },
   { href: "/settings", label: "Settings" },
 ];
 
