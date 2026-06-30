@@ -56,6 +56,9 @@ export default defineSchema({
     lastSeenAt: v.number(),
     preferences: preferencesValidator,
     usageLimits: usageLimitsValidator,
+    // BYOK: the user's own AI Gateway key, AES-GCM-encrypted server-side
+    // (never stored or returned in plaintext). Admins use the server key.
+    gatewayKeyEncrypted: v.optional(v.string()),
   })
     .index("email", ["email"])
     .index("by_role", ["role"])
