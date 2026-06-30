@@ -66,12 +66,17 @@ function formatClock(ms: number): string {
 export function HugoTranscript({
   messages,
   fill = false,
+  anchor = "top",
   className,
 }: {
   messages: readonly TranscriptMessage[];
   /** Fill the parent (no card chrome / max-height) so a full-viewport surface
    *  can own the scroll + fade. Defaults to the bordered card. */
   fill?: boolean;
+  /** "bottom" pins a short conversation to the bottom (near the composer) and
+   *  lets it grow upward — used in voice mode so turns hug the input and fade
+   *  up behind the hero orb instead of stacking over it. */
+  anchor?: "top" | "bottom";
   className?: string;
 }) {
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -125,6 +130,12 @@ export function HugoTranscript({
       aria-live="polite"
       aria-label="Conversation transcript"
     >
+      {/* Bottom-anchor: a growable spacer pushes a short conversation down to
+          the composer; when history overflows it collapses to 0 and the list
+          scrolls normally from the top (avoids the justify-end clipping bug). */}
+      {anchor === "bottom" && (
+        <div aria-hidden className="min-h-0 flex-1 shrink-0" />
+      )}
       {turns.map((turn) => {
         const isUser = turn.role === "user";
         const isAssistant = turn.role === "assistant";

@@ -512,6 +512,31 @@ function HugoSurfaceInner({
               </p>
             </div>
           </div>
+        ) : voiceActive ? (
+          // Voice: turns hug the composer and fade up behind the hero orb,
+          // rather than stacking over it. The transcript owns its own scroll
+          // (bottom-anchored); the mask dissolves the top behind the orb.
+          <div
+            className="h-full px-4"
+            style={{
+              // Pixel-based so the fade tracks the fixed-size hero orb + its
+              // rings (~480px tall at the top) regardless of viewport height:
+              // content behind the orb is invisible and fades in below it.
+              maskImage:
+                "linear-gradient(to bottom, transparent 0, transparent 150px, black 480px)",
+              WebkitMaskImage:
+                "linear-gradient(to bottom, transparent 0, transparent 150px, black 480px)",
+            }}
+          >
+            <div className="mx-auto h-full max-w-3xl">
+              <HugoTranscript
+                messages={transcript}
+                fill
+                anchor="bottom"
+                className="pt-[19rem] pb-2"
+              />
+            </div>
+          </div>
         ) : (
           <div
             className="scroll-thin h-full overflow-y-auto px-4"
@@ -522,12 +547,7 @@ function HugoSurfaceInner({
                 "linear-gradient(to bottom, transparent 0, black 14%)",
             }}
           >
-            <div
-              className={cn(
-                "mx-auto max-w-3xl pb-4",
-                voiceActive ? "pt-[19rem]" : "pt-10",
-              )}
-            >
+            <div className="mx-auto max-w-3xl pb-4 pt-10">
               <HugoTranscript messages={transcript} fill />
             </div>
           </div>
