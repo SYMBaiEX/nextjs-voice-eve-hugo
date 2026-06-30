@@ -439,7 +439,12 @@ function HugoSurfaceInner({
       <div className="relative min-h-0 flex-1">
         {isEmpty ? (
           <div className="grid h-full place-items-center px-4">
-            <Greeting onPick={(t) => setInput(t)} />
+            <Greeting
+              onPick={(t) => {
+                setInput(t);
+                textareaRef.current?.focus();
+              }}
+            />
           </div>
         ) : (
           <div
@@ -464,7 +469,10 @@ function HugoSurfaceInner({
 
         {/* Corner orb — small ambient presence; click to start voice. */}
         {!voiceActive && (
-          <div className="absolute right-4 top-2 z-10">
+          <div
+            className="absolute right-4 top-2 z-10 cursor-pointer"
+            title="Talk to Hugo"
+          >
             <OrbSlot
               state={orbState}
               size={52}
