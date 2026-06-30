@@ -65,9 +65,13 @@ function formatClock(ms: number): string {
 
 export function HugoTranscript({
   messages,
+  fill = false,
   className,
 }: {
   messages: readonly TranscriptMessage[];
+  /** Fill the parent (no card chrome / max-height) so a full-viewport surface
+   *  can own the scroll + fade. Defaults to the bordered card. */
+  fill?: boolean;
   className?: string;
 }) {
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -94,6 +98,7 @@ export function HugoTranscript({
   }, [signature]);
 
   if (turns.length === 0) {
+    if (fill) return null;
     return (
       <div
         className={cn(
@@ -110,7 +115,10 @@ export function HugoTranscript({
     <div
       ref={scrollRef}
       className={cn(
-        "scroll-thin flex max-h-[28rem] flex-col gap-4 overflow-y-auto rounded-lg border border-border bg-surface/40 px-4 py-4",
+        "scroll-thin flex flex-col gap-4 overflow-y-auto",
+        fill
+          ? "h-full"
+          : "max-h-[28rem] rounded-lg border border-border bg-surface/40 px-4 py-4",
         className,
       )}
       role="log"

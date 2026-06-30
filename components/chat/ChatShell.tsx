@@ -6,7 +6,7 @@ import { useMutation } from "convex/react";
 import { Menu, PanelLeft } from "lucide-react";
 import { toast } from "sonner";
 import { api } from "@/convex/_generated/api";
-import { HugoConsole } from "@/components/hugo/HugoConsole";
+import { HugoSurface } from "@/components/hugo/HugoSurface";
 import { AppSidebar } from "@/components/chat/AppSidebar";
 import { useAuthTransition } from "@/components/providers/ConvexClientProvider";
 
@@ -50,6 +50,15 @@ export function ChatShell({ collapsedInitial }: { collapsedInitial: boolean }) {
     },
     [router],
   );
+
+  // Adopt a server-created conversation id without remounting the surface:
+  // update the URL in place (shareable + reload-safe) but don't drive the React
+  // key off it, so an in-flight stream/voice session isn't interrupted.
+  const adoptConversationId = useCallback((id: string) => {
+    if (typeof window === "undefined") return;
+    if (new URLSearchParams(window.location.search).get("c") === id) return;
+    window.history.replaceState(null, "", `/chat?c=${id}`);
+  }, []);
 
   const handleNew = useCallback(async () => {
     if (creating) return;
@@ -118,13 +127,12 @@ export function ChatShell({ collapsedInitial }: { collapsedInitial: boolean }) {
         {/* Hugo surface */}
         <div className="relative min-h-0 flex-1 overflow-hidden">
           <div className="bg-grid bg-grid-fade pointer-events-none absolute inset-0 -z-10 opacity-40" />
-          <div className="mx-auto h-full max-w-3xl px-4 pb-4">
-            <HugoConsole
-              key={activeId ?? "new"}
-              conversationId={activeId}
-              className="h-full"
-            />
-          </div>
+          <HugoSurface
+            key={activeId ?? "new"}
+            conversationId={activeId}
+            onConversationId={adoptConversationId}
+            className="h-full"
+          />
         </div>
       </main>
     </div>
