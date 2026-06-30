@@ -8,6 +8,7 @@ import { toast } from "sonner";
 import { api } from "@/convex/_generated/api";
 import { HugoSurface } from "@/components/hugo/HugoSurface";
 import { AppSidebar } from "@/components/chat/AppSidebar";
+import { GatewayKeyBanner } from "@/components/chat/GatewayKeyBanner";
 import { useAuthTransition } from "@/components/providers/ConvexClientProvider";
 
 /**
@@ -113,6 +114,9 @@ export function ChatShell({ collapsedInitial }: { collapsedInitial: boolean }) {
             <Menu aria-hidden className="size-4" />
           </button>
         </div>
+
+        {/* BYOK onboarding nudge (non-admins without a key) + the shared key dialog */}
+        <GatewayKeyBanner />
 
         {/* Hugo surface */}
         <div className="relative min-h-0 flex-1 overflow-hidden">

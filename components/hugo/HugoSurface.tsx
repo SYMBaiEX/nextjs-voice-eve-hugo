@@ -29,6 +29,8 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Spinner } from "@/components/ui/misc";
+import { useAuthTransition } from "@/components/providers/ConvexClientProvider";
+import { OPEN_GATEWAY_KEY_EVENT } from "@/lib/constants";
 import { cn } from "@/lib/utils";
 
 /**
@@ -176,6 +178,25 @@ function HugoSurfaceInner({
     string | undefined
   >(conversationId);
 
+  // BYOK soft-gate: non-admins without their own AI Gateway key can't reach the
+  // model. Nudge them to add one (opens the dialog hosted by GatewayKeyBanner)
+  // instead of firing a request that the server would reject with 402.
+  const { canRunProtectedQueries } = useAuthTransition();
+  const me = useQuery(
+    api.users.currentUser,
+    canRunProtectedQueries ? {} : "skip",
+  );
+  const keyless = !!me && me.role !== "admin" && !me.hasGatewayKey;
+  const nudgeForKey = useCallback(() => {
+    toast.error("Add your AI Gateway key to use Hugo.", {
+      action: {
+        label: "Add key",
+        onClick: () =>
+          window.dispatchEvent(new CustomEvent(OPEN_GATEWAY_KEY_EVENT)),
+      },
+    });
+  }, []);
+
   // ── Voice session lifecycle (lifted from HugoVoicePanel) ──
   const [session, setSession] = useState<HugoRealtimeSession | null>(null);
   const [isStarting, setIsStarting] = useState(false);
@@ -302,6 +323,10 @@ function HugoSurfaceInner({
   // ── Voice start / connect / end (lifted from HugoVoicePanel) ──
   const startVoice = useCallback(async () => {
     if (isStarting || session) return;
+    if (keyless) {
+      nudgeForKey();
+      return;
+    }
     setIsStarting(true);
     try {
       const res = await fetch("/api/voice/session/start", {
@@ -335,7 +360,14 @@ function HugoSurfaceInner({
     } finally {
       setIsStarting(false);
     }
-  }, [activeConversationId, adoptConversationId, isStarting, session]);
+  }, [
+    activeConversationId,
+    adoptConversationId,
+    isStarting,
+    keyless,
+    nudgeForKey,
+    session,
+  ]);
 
   const connect = useCallback(async () => {
     try {
@@ -399,10 +431,14 @@ function HugoSurfaceInner({
   const submitText = useCallback(() => {
     const text = input.trim();
     if (!text || isStreaming) return;
+    if (keyless) {
+      nudgeForKey();
+      return;
+    }
     setInput("");
     void sendMessage({ text }, { body: { conversationId: activeConversationId } });
     textareaRef.current?.focus();
-  }, [input, isStreaming, sendMessage, activeConversationId]);
+  }, [input, isStreaming, keyless, nudgeForKey, sendMessage, activeConversationId]);
 
   const onKeyDown = useCallback(
     (e: React.KeyboardEvent<HTMLTextAreaElement>) => {

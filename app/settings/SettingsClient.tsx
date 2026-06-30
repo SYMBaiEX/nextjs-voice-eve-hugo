@@ -5,7 +5,10 @@ import { useRouter } from "next/navigation";
 import { useMutation, useQuery } from "convex/react";
 import {
   Brain,
+  Check,
+  ExternalLink,
   Gauge,
+  KeyRound,
   Lock,
   Plus,
   Shield,
@@ -15,7 +18,8 @@ import {
 import { toast } from "sonner";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
-import { VOICE_OPTIONS } from "@/lib/constants";
+import { AI_GATEWAY_KEYS_URL, VOICE_OPTIONS } from "@/lib/constants";
+import { GatewayKeyDialog } from "@/components/chat/GatewayKeyDialog";
 import { ThemeToggle } from "@/components/layout/ThemeToggle";
 import {
   Card,
@@ -193,6 +197,7 @@ export function SettingsClient() {
   const removeMemory = useMutation(api.memories.remove);
 
   const [savingPref, setSavingPref] = useState(false);
+  const [keyDialogOpen, setKeyDialogOpen] = useState(false);
 
   useEffect(() => {
     if (!isSigningOut && !isAuthLoading && !isAuthenticated) {
@@ -397,6 +402,58 @@ export function SettingsClient() {
         </CardContent>
       </Card>
 
+      {/* AI Gateway key (BYOK) */}
+      <Card className="animate-rise">
+        <SectionHeading
+          icon={KeyRound}
+          title="AI Gateway key"
+          description="Bring your own Vercel AI Gateway key. Your models, usage, and billing stay yours."
+        />
+        <CardContent className="flex flex-col gap-3">
+          {me === undefined ? (
+            <Skeleton className="h-9 w-full" />
+          ) : me?.role === "admin" ? (
+            <p className="text-sm text-text-muted">
+              You’re an admin — Hugo uses the platform server key for your
+              account, so no personal key is required.
+            </p>
+          ) : (
+            <>
+              <div className="flex items-center justify-between gap-3">
+                <span className="text-sm text-text-secondary">Status</span>
+                {me?.hasGatewayKey ? (
+                  <Badge variant="cyan" className="gap-1">
+                    <Check aria-hidden className="size-3" />
+                    Connected
+                  </Badge>
+                ) : (
+                  <Badge variant="muted">Not set</Badge>
+                )}
+              </div>
+              <Separator />
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <a
+                  href={AI_GATEWAY_KEYS_URL}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1 text-xs text-hugo-cyan hover:underline"
+                >
+                  Generate a key at vercel.com
+                  <ExternalLink aria-hidden className="size-3" />
+                </a>
+                <Button
+                  variant={me?.hasGatewayKey ? "subtle" : "primary"}
+                  size="sm"
+                  onClick={() => setKeyDialogOpen(true)}
+                >
+                  {me?.hasGatewayKey ? "Update or remove" : "Add key"}
+                </Button>
+              </div>
+            </>
+          )}
+        </CardContent>
+      </Card>
+
       {/* Usage today */}
       <Card className="animate-rise">
         <SectionHeading
@@ -594,6 +651,13 @@ export function SettingsClient() {
           </ul>
         </CardContent>
       </Card>
+
+      {/* BYOK key dialog (shared with the chat banner) */}
+      <GatewayKeyDialog
+        open={keyDialogOpen}
+        hasKey={!!me?.hasGatewayKey}
+        onClose={() => setKeyDialogOpen(false)}
+      />
     </div>
   );
 }

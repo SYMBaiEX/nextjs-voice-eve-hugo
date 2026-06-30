@@ -41,10 +41,11 @@ export async function POST(req: Request) {
   }
   const key = parsed.data.key.trim();
 
-  // Validate the key actually works against the gateway before storing it.
+  // Validate the key actually authenticates before storing it. `getCredits()`
+  // hits an auth-gated endpoint, so an invalid key throws here — unlike
+  // `getAvailableModels()`, which serves a public catalog to any key.
   try {
-    const { models } = await createGateway({ apiKey: key }).getAvailableModels();
-    if (!models || models.length === 0) throw new Error("empty catalog");
+    await createGateway({ apiKey: key }).getCredits();
   } catch {
     return NextResponse.json(
       { error: "That key didn’t work with the AI Gateway — double-check it." },

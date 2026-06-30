@@ -128,3 +128,10 @@ export const COST_ESTIMATES = {
 } as const;
 
 export const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
+
+/** Where users generate their own Vercel AI Gateway key (BYOK). */
+export const AI_GATEWAY_KEYS_URL = "https://vercel.com/ai-gateway";
+
+/** Window event used to open the BYOK key dialog from anywhere (e.g. the
+ *  composer's keyless nudge → the dialog hosted by GatewayKeyBanner). */
+export const OPEN_GATEWAY_KEY_EVENT = "hugo:open-gateway-key";
