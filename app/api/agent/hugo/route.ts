@@ -9,9 +9,10 @@ import {
   buildHugoSystemPrompt,
   buildHugoTools,
   getHugoTextCallSettings,
-  getTextModel,
-  isAiConfigured,
+  resolveUserModel,
 } from "@/lib/ai";
+import { getUserGateway } from "@/lib/user-gateway";
+import { resolveTextModel } from "@/lib/model-catalog";
 import { hugoTelemetry, track } from "@/lib/telemetry";
 import { isTextLimitReached } from "@/lib/usage";
 import { rateLimit } from "@/lib/rate-limit";
@@ -36,9 +37,6 @@ export async function POST(req: Request) {
   if (!token) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
-  if (!isAiConfigured()) {
-    return NextResponse.json({ error: "AI is not configured." }, { status: 503 });
-  }
 
   const parsed = Body.safeParse(await req.json().catch(() => ({})));
   if (!parsed.success) {
@@ -48,6 +46,20 @@ export async function POST(req: Request) {
   const me = await fetchQuery(api.users.currentUser, {}, { token });
   if (!me) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  // Resolve the caller's gateway (admin → server key; everyone else → BYOK).
+  const { gw, cacheKey, configured } = await getUserGateway(me, token);
+  if (!configured) {
+    return me.role === "admin"
+      ? NextResponse.json({ error: "AI is not configured." }, { status: 503 })
+      : NextResponse.json(
+          {
+            error: "Add your Vercel AI Gateway key in Settings to use Hugo.",
+            code: "gateway_key_required",
+          },
+          { status: 402 },
+        );
   }
 
   // Per-user rate limit — this is a paid LLM call (PRD 5.17).
@@ -94,12 +106,17 @@ export async function POST(req: Request) {
     | undefined;
 
   const startedAt = Date.now();
-  const model = getTextModel(runtime?.defaultTextModel);
+  const model = await resolveTextModel(
+    resolveUserModel(me, runtime, "text"),
+    gw,
+    cacheKey,
+    configured,
+  );
   const callSettings = getHugoTextCallSettings("agent");
 
   try {
     const { text, usage: modelUsage } = await generateText({
-      model,
+      model: gw.languageModel(model),
       system: buildHugoSystemPrompt({
         mode: "text",
         userName: me.name,

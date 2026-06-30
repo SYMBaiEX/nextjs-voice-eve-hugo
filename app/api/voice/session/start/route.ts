@@ -6,9 +6,9 @@ import type { Id } from "@/convex/_generated/dataModel";
 import {
   buildHugoSystemPrompt,
   getDefaultVoice,
-  isAiConfigured,
   resolveUserModel,
 } from "@/lib/ai";
+import { getUserGateway } from "@/lib/user-gateway";
 import { resolveRealtimeModel } from "@/lib/model-catalog";
 import { clientSafeTools } from "@/agent/hugo/tools/registry";
 import { isVoiceLimitReached } from "@/lib/usage";
@@ -77,11 +77,21 @@ export async function POST(req: Request) {
     );
   }
 
-  if (!isAiConfigured()) {
-    return NextResponse.json(
-      { error: "Realtime voice is not configured. Try text chat instead." },
-      { status: 503, headers: NO_STORE_HEADERS },
-    );
+  // Resolve the caller's gateway (admin → server key; everyone else → BYOK).
+  const { gw, cacheKey, configured } = await getUserGateway(me, token);
+  if (!configured) {
+    return me.role === "admin"
+      ? NextResponse.json(
+          { error: "Realtime voice is not configured. Try text chat instead." },
+          { status: 503, headers: NO_STORE_HEADERS },
+        )
+      : NextResponse.json(
+          {
+            error: "Add your Vercel AI Gateway key in Settings to use voice.",
+            code: "gateway_key_required",
+          },
+          { status: 402, headers: NO_STORE_HEADERS },
+        );
   }
 
   // Enforce daily voice-minute limit.
@@ -116,6 +126,9 @@ export async function POST(req: Request) {
   // session.
   const model = await resolveRealtimeModel(
     resolveUserModel(me, runtime, "realtime"),
+    gw,
+    cacheKey,
+    configured,
   );
   const voice = getDefaultVoice(runtime?.defaultVoice);
 

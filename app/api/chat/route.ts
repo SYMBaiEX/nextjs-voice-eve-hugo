@@ -15,9 +15,9 @@ import {
   buildHugoSystemPrompt,
   buildHugoTools,
   getHugoTextCallSettings,
-  isAiConfigured,
   resolveUserModel,
 } from "@/lib/ai";
+import { getUserGateway } from "@/lib/user-gateway";
 import { resolveTextModel } from "@/lib/model-catalog";
 import { hugoTelemetry, track } from "@/lib/telemetry";
 import { isTextLimitReached } from "@/lib/usage";
@@ -99,11 +99,25 @@ export async function POST(req: Request) {
     );
   }
 
-  if (!isAiConfigured()) {
-    return NextResponse.json(
-      { error: "AI is not configured. Set AI_GATEWAY_API_KEY to chat with Hugo." },
-      { status: 503 },
-    );
+  // Resolve the caller's gateway (admin → server key; everyone else → BYOK).
+  const { gw, cacheKey, configured } = await getUserGateway(me, token);
+  if (!configured) {
+    return me.role === "admin"
+      ? NextResponse.json(
+          {
+            error:
+              "AI is not configured. Set AI_GATEWAY_API_KEY to chat with Hugo.",
+          },
+          { status: 503 },
+        )
+      : NextResponse.json(
+          {
+            error:
+              "Add your Vercel AI Gateway key in Settings to chat with Hugo.",
+            code: "gateway_key_required",
+          },
+          { status: 402 },
+        );
   }
 
   // Resolve or create the conversation.
@@ -177,12 +191,17 @@ export async function POST(req: Request) {
   // The user's own preference wins; the admin global default applies only to the
   // admin (every other user is independent). Then validated against the gateway
   // catalog so a bad/typo'd id falls back to a known-good model instead of 404-ing.
-  const model = await resolveTextModel(resolveUserModel(me, runtime, "text"));
+  const model = await resolveTextModel(
+    resolveUserModel(me, runtime, "text"),
+    gw,
+    cacheKey,
+    configured,
+  );
   const callSettings = getHugoTextCallSettings("chat");
 
   try {
     const result = streamText({
-      model,
+      model: gw.languageModel(model),
       system,
       messages: modelMessages,
       tools: buildHugoTools({ token, conversationId, role: me.role }),

@@ -1,5 +1,4 @@
 import { NextResponse } from "next/server";
-import { gateway } from "@ai-sdk/gateway";
 import {
   experimental_getRealtimeToolDefinitions,
   type Experimental_RealtimeToolDefinition,
@@ -8,7 +7,8 @@ import { z } from "zod";
 import { fetchQuery, fetchMutation, authToken } from "@/lib/convex-server";
 import { api } from "@/convex/_generated/api";
 import type { Doc, Id } from "@/convex/_generated/dataModel";
-import { getRealtimeModel, isAiConfigured } from "@/lib/ai";
+import { getRealtimeModel } from "@/lib/ai";
+import { getUserGateway } from "@/lib/user-gateway";
 import { rateLimit } from "@/lib/rate-limit";
 import { REALTIME_TOKEN_RATE, REALTIME_TOKEN_TTL_SECONDS } from "@/lib/constants";
 import { track } from "@/lib/telemetry";
@@ -179,6 +179,9 @@ export async function POST(req: Request) {
     );
   }
 
+  // Resolve the caller's gateway (admin → server key; everyone else → BYOK).
+  const { gw, configured } = await getUserGateway(me, token);
+
   const url = new URL(req.url);
   const sessionParam = url.searchParams.get("session") as
     | Id<"voiceSessions">
@@ -303,21 +306,30 @@ export async function POST(req: Request) {
     });
   }
 
-  if (!isAiConfigured()) {
-    // Voice unavailable without gateway auth — signal text fallback.
+  if (!configured) {
+    // Voice unavailable without gateway auth — signal text fallback. Admin means
+    // the server key is missing; everyone else needs to bring their own key.
+    const forAdmin = me.role === "admin";
     await fetchMutation(
       api.voiceSessions.updateStatus,
       {
         voiceSessionId: sessionParam,
         status: "failed",
-        errorCode: "no_gateway_key",
-        errorMessage: "AI Gateway key not configured.",
+        errorCode: forAdmin ? "no_gateway_key" : "gateway_key_required",
+        errorMessage: forAdmin
+          ? "AI Gateway key not configured."
+          : "Add your Vercel AI Gateway key in Settings to use voice.",
       },
       { token },
     ).catch(() => {});
     return NextResponse.json(
-      { error: "Realtime voice is not configured. Falling back to text chat." },
-      { status: 503, headers: NO_STORE_HEADERS },
+      {
+        error: forAdmin
+          ? "Realtime voice is not configured. Falling back to text chat."
+          : "Add your Vercel AI Gateway key in Settings to use voice.",
+        ...(forAdmin ? {} : { code: "gateway_key_required" }),
+      },
+      { status: forAdmin ? 503 : 402, headers: NO_STORE_HEADERS },
     );
   }
 
@@ -348,7 +360,7 @@ export async function POST(req: Request) {
       token: realtimeToken,
       url: realtimeUrl,
     } =
-      await gateway.experimental_realtime.getToken({
+      await gw.experimental_realtime.getToken({
         expiresAfterSeconds: REALTIME_TOKEN_TTL_SECONDS,
         model,
         sessionConfig,

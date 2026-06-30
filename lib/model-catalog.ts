@@ -1,6 +1,5 @@
 import "server-only";
-import { gateway } from "@ai-sdk/gateway";
-import { getRealtimeModel, getTextModel, isAiConfigured } from "@/lib/ai";
+import type { GatewayProvider } from "@ai-sdk/gateway";
 import {
   AVAILABLE_REALTIME_MODELS,
   AVAILABLE_TEXT_MODELS,
@@ -8,12 +7,14 @@ import {
 } from "@/lib/constants";
 
 /**
- * Server-side model catalog (PRD 5.8/5.11).
+ * Server-side model catalog (PRD 5.8/5.11), per gateway key (BYOK).
  *
- * Single, cached source of the models the AI Gateway actually serves for this
- * key (`gateway.getAvailableModels()`), plus helpers that resolve a requested
- * model to one that is guaranteed to exist — so a typo'd env var, admin
- * default, or stale user preference can never 404 a chat or voice session.
+ * The models the AI Gateway actually serves depend on *which key* makes the
+ * call, so the catalog and the resolution helpers take a user-scoped
+ * `GatewayProvider` + a `cacheKey` (admin → "server"; each BYOK user →
+ * "user:<id>"). The catalog is cached per key. `resolve*Model` maps a requested
+ * model to one that is guaranteed to exist for that key — so a typo'd env var,
+ * admin default, or stale preference can never 404 a chat or voice session.
  */
 
 export interface ModelCatalog {
@@ -23,8 +24,9 @@ export interface ModelCatalog {
   realtimeIds: Set<string>;
 }
 
-let cache: { catalog: ModelCatalog; at: number } | null = null;
+const cache = new Map<string, { catalog: ModelCatalog; at: number }>();
 const TTL_MS = 10 * 60 * 1000;
+const MAX_CACHE_ENTRIES = 100;
 
 /** Stable, widely-available fallbacks, tried in order, if a requested model
  *  isn't in the catalog. The last resort is "any available model". */
@@ -47,13 +49,29 @@ function sortModels(a: ModelOption, b: ModelOption): number {
   return fa === fb ? a.label.localeCompare(b.label) : fa.localeCompare(fb);
 }
 
-/** The full catalog, cached. Returns null if the gateway isn't configured or is
- *  unreachable (callers then trust the requested model / curated lists). */
-export async function getModelCatalog(): Promise<ModelCatalog | null> {
-  if (!isAiConfigured()) return null;
-  if (cache && Date.now() - cache.at < TTL_MS) return cache.catalog;
+/** Drop the oldest cache entries once the map grows past the cap. */
+function pruneCache() {
+  if (cache.size <= MAX_CACHE_ENTRIES) return;
+  const oldestFirst = [...cache.entries()].sort((a, b) => a[1].at - b[1].at);
+  for (const [key] of oldestFirst) {
+    if (cache.size <= MAX_CACHE_ENTRIES) break;
+    cache.delete(key);
+  }
+}
+
+/** The model catalog for a specific gateway key, cached per `cacheKey`. Returns
+ *  null if the gateway isn't configured for this user or is unreachable (callers
+ *  then trust the requested model / curated lists). */
+export async function getModelCatalog(
+  gw: GatewayProvider,
+  cacheKey: string,
+  configured: boolean,
+): Promise<ModelCatalog | null> {
+  if (!configured) return null;
+  const hit = cache.get(cacheKey);
+  if (hit && Date.now() - hit.at < TTL_MS) return hit.catalog;
   try {
-    const { models } = await gateway.getAvailableModels();
+    const { models } = await gw.getAvailableModels();
     const toOption = (m: { id: string; name?: string }): ModelOption => ({
       id: m.id,
       label: m.name || m.id,
@@ -73,7 +91,8 @@ export async function getModelCatalog(): Promise<ModelCatalog | null> {
       textIds: new Set(text.map((m) => m.id)),
       realtimeIds: new Set(realtime.map((m) => m.id)),
     };
-    cache = { catalog, at: Date.now() };
+    cache.set(cacheKey, { catalog, at: Date.now() });
+    pruneCache();
     return catalog;
   } catch {
     return null;
@@ -91,29 +110,27 @@ function ensure(
   return first ?? requested;
 }
 
-/** Resolve `requested` to a text model that exists in the catalog (or itself if
+/** Resolve `requested` to a text model that exists for this key (or itself if
  *  the catalog can't be loaded). */
-export async function resolveTextModel(requested: string): Promise<string> {
-  const cat = await getModelCatalog();
+export async function resolveTextModel(
+  requested: string,
+  gw: GatewayProvider,
+  cacheKey: string,
+  configured: boolean,
+): Promise<string> {
+  const cat = await getModelCatalog(gw, cacheKey, configured);
   if (!cat) return requested;
   return ensure(requested, cat.textIds, TEXT_FALLBACKS);
 }
 
-/** Resolve `requested` to a realtime model that exists in the catalog. */
-export async function resolveRealtimeModel(requested: string): Promise<string> {
-  const cat = await getModelCatalog();
+/** Resolve `requested` to a realtime model that exists for this key. */
+export async function resolveRealtimeModel(
+  requested: string,
+  gw: GatewayProvider,
+  cacheKey: string,
+  configured: boolean,
+): Promise<string> {
+  const cat = await getModelCatalog(gw, cacheKey, configured);
   if (!cat) return requested;
   return ensure(requested, cat.realtimeIds, REALTIME_FALLBACKS);
-}
-
-/** Convenience: the effective default text/realtime model, validated. */
-export async function defaultModels(
-  runtime: { defaultTextModel?: string; defaultRealtimeModel?: string } | null,
-): Promise<{ text: string; realtime: string }> {
-  return {
-    text: await resolveTextModel(getTextModel(runtime?.defaultTextModel)),
-    realtime: await resolveRealtimeModel(
-      getRealtimeModel(runtime?.defaultRealtimeModel),
-    ),
-  };
 }

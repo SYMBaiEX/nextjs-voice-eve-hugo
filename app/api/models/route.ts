@@ -6,6 +6,7 @@ import {
   AVAILABLE_TEXT_MODELS,
 } from "@/lib/constants";
 import { resolveUserModel } from "@/lib/ai";
+import { getUserGateway } from "@/lib/user-gateway";
 import {
   getModelCatalog,
   resolveRealtimeModel,
@@ -30,18 +31,36 @@ export async function GET() {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const [me, runtime, catalog] = await Promise.all([
+  const [me, runtime] = await Promise.all([
     fetchQuery(api.users.currentUser, {}, { token }).catch(() => null),
     fetchQuery(api.settings.getRuntime, {}, { token }).catch(() => null),
-    getModelCatalog(),
   ]);
 
-  // The default shown when a user hasn't picked: their own resolution (admin
-  // global default applies only to the admin), validated against the catalog.
-  const who = me ?? {};
+  // No profile yet: curated lists + platform defaults (no gateway call).
+  if (!me) {
+    return NextResponse.json(
+      {
+        text: [...AVAILABLE_TEXT_MODELS],
+        realtime: [...AVAILABLE_REALTIME_MODELS],
+        defaultText: resolveUserModel({}, runtime, "text"),
+        defaultRealtime: resolveUserModel({}, runtime, "realtime"),
+      },
+      { headers: NO_STORE },
+    );
+  }
+
+  // The catalog reflects the caller's own key (admin → server; BYOK → their key);
+  // a keyless non-admin falls back to the curated lists + the platform default.
+  const { gw, cacheKey, configured } = await getUserGateway(me, token);
+  const catalog = await getModelCatalog(gw, cacheKey, configured);
   const [defaultText, defaultRealtime] = await Promise.all([
-    resolveTextModel(resolveUserModel(who, runtime, "text")),
-    resolveRealtimeModel(resolveUserModel(who, runtime, "realtime")),
+    resolveTextModel(resolveUserModel(me, runtime, "text"), gw, cacheKey, configured),
+    resolveRealtimeModel(
+      resolveUserModel(me, runtime, "realtime"),
+      gw,
+      cacheKey,
+      configured,
+    ),
   ]);
 
   return NextResponse.json(
