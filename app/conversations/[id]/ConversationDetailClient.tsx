@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useMutation, useQuery } from "convex/react";
@@ -30,6 +30,7 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/misc";
 import { timeAgo } from "@/lib/utils";
+import { useAuthTransition } from "@/components/providers/ConvexClientProvider";
 
 /**
  * ConversationDetailClient — a single conversation (PRD 5.5, 5.7).
@@ -90,13 +91,20 @@ export function ConversationDetailClient({
   conversationId: Id<"conversations">;
 }) {
   const router = useRouter();
-  const conversation = useQuery(api.conversations.get, { conversationId }) as
-    | ConversationDoc
-    | null
-    | undefined;
-  const messages = useQuery(api.messages.list, { conversationId, limit: 500 }) as
-    | MessageDoc[]
-    | undefined;
+  const {
+    canRunProtectedQueries,
+    isAuthenticated,
+    isAuthLoading,
+    isSigningOut,
+  } = useAuthTransition();
+  const conversation = useQuery(
+    api.conversations.get,
+    canRunProtectedQueries ? { conversationId } : "skip",
+  ) as ConversationDoc | null | undefined;
+  const messages = useQuery(
+    api.messages.list,
+    canRunProtectedQueries ? { conversationId, limit: 500 } : "skip",
+  ) as MessageDoc[] | undefined;
 
   const rename = useMutation(api.conversations.rename);
   const setStatus = useMutation(api.conversations.setStatus);
@@ -105,6 +113,12 @@ export function ConversationDetailClient({
   const [draftTitle, setDraftTitle] = useState("");
   const [continuing, setContinuing] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (!isSigningOut && !isAuthLoading && !isAuthenticated) {
+      router.replace("/sign-in");
+    }
+  }, [isAuthenticated, isAuthLoading, isSigningOut, router]);
 
   const startEditing = useCallback(() => {
     if (!conversation) return;
@@ -167,6 +181,14 @@ export function ConversationDetailClient({
 
   const isLoadingConvo = conversation === undefined;
   const isLoadingMessages = messages === undefined;
+
+  if (isSigningOut || (!isAuthLoading && !isAuthenticated)) {
+    return (
+      <div className="panel flex min-h-[24rem] items-center justify-center p-6 text-sm text-text-secondary">
+        {isSigningOut ? "Signing out..." : "Redirecting to sign in..."}
+      </div>
+    );
+  }
 
   // Not found (or no access): the query returns null.
   if (conversation === null) {

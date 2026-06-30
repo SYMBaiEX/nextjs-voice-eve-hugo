@@ -2,10 +2,12 @@ import { NextResponse } from "next/server";
 import { fetchMutation, fetchQuery, authToken } from "@/lib/convex-server";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
-import { getRealtimeModel, getDefaultVoice } from "@/lib/ai";
+import { getRealtimeModel, getDefaultVoice, isAiConfigured } from "@/lib/ai";
 import { clientSafeTools } from "@/agent/hugo/tools/registry";
 import { isVoiceLimitReached } from "@/lib/usage";
 import { track } from "@/lib/telemetry";
+import { rateLimit } from "@/lib/rate-limit";
+import { REALTIME_TOKEN_RATE } from "@/lib/constants";
 
 /**
  * POST /api/voice/session/start (PRD 5.4, 5.11)
@@ -27,6 +29,34 @@ export async function POST(req: Request) {
     /* empty body is fine */
   }
 
+  const me = await fetchQuery(api.users.currentUser, {}, { token });
+  if (!me) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  const limit = rateLimit(
+    `voice-session-start:${me._id}`,
+    REALTIME_TOKEN_RATE.max,
+    REALTIME_TOKEN_RATE.windowMs,
+  );
+  if (!limit.ok) {
+    track("voice_session_start_rate_limited", { userId: me._id });
+    return NextResponse.json(
+      { error: "Too many session attempts. Slow down a moment." },
+      {
+        status: 429,
+        headers: { "Retry-After": String(Math.ceil(limit.retryAfterMs / 1000)) },
+      },
+    );
+  }
+
+  if (!isAiConfigured()) {
+    return NextResponse.json(
+      { error: "Realtime voice is not configured. Try text chat instead." },
+      { status: 503 },
+    );
+  }
+
   // Enforce daily voice-minute limit.
   const usage = await fetchQuery(api.usageEvents.todayForUser, {}, { token });
   if (
@@ -45,7 +75,6 @@ export async function POST(req: Request) {
   const runtime = await fetchQuery(api.settings.getRuntime, {}, { token }).catch(
     () => null,
   );
-  const me = await fetchQuery(api.users.currentUser, {}, { token });
   if (runtime?.maintenanceMode && me?.role !== "admin") {
     return NextResponse.json(
       { error: "Hugo is in maintenance mode. Please try again shortly." },
@@ -83,7 +112,7 @@ export async function POST(req: Request) {
     { token },
   ).catch(() => {});
 
-  track("voice_session_started", { model, voice });
+  track("voice_session_started", { model, userId: me._id, voice });
 
   return NextResponse.json({
     conversationId,

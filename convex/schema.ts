@@ -79,6 +79,9 @@ export default defineSchema({
     .index("by_user_lastMessage", ["userId", "lastMessageAt"])
     .index("by_user_status_lastMessage", ["userId", "status", "lastMessageAt"])
     .index("by_status", ["status"])
+    .index("by_status_lastMessage", ["status", "lastMessageAt"])
+    .index("by_mode_lastMessage", ["mode", "lastMessageAt"])
+    .index("by_status_mode_lastMessage", ["status", "mode", "lastMessageAt"])
     .index("by_lastMessage", ["lastMessageAt"]),
 
   messages: defineTable({
@@ -132,6 +135,7 @@ export default defineSchema({
     .index("by_user_started", ["userId", "startedAt"])
     .index("by_conversation", ["conversationId"])
     .index("by_status", ["status"])
+    .index("by_status_started", ["status", "startedAt"])
     .index("by_started", ["startedAt"]),
 
   usageEvents: defineTable({
@@ -190,6 +194,7 @@ export default defineSchema({
     .index("by_user", ["userId"])
     .index("by_conversation", ["conversationId"])
     .index("by_approvalStatus", ["approvalStatus"])
+    .index("by_approvalStatus_started", ["approvalStatus", "startedAt"])
     .index("by_started", ["startedAt"]),
 
   memories: defineTable({

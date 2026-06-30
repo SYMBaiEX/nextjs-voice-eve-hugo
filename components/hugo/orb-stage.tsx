@@ -10,9 +10,9 @@ import {
   useSyncExternalStore,
   type ReactNode,
 } from "react";
-import { animate, spring, utils, type JSAnimation } from "animejs";
+import dynamic from "next/dynamic";
+import type { JSAnimation } from "animejs";
 import type { HugoOrbState } from "@/lib/types";
-import { HugoOrbStage } from "@/components/hugo/HugoOrbStage";
 import { useReducedMotion } from "@/components/motion/useReducedMotion";
 
 /**
@@ -33,6 +33,12 @@ import { useReducedMotion } from "@/components/motion/useReducedMotion";
  */
 
 const BASE_SIZE = 280;
+
+const LazyHugoOrbStage = dynamic(
+  () =>
+    import("@/components/hugo/HugoOrbStage").then((mod) => mod.HugoOrbStage),
+  { ssr: false },
+);
 
 interface SlotRegistration {
   id: string;
@@ -59,6 +65,7 @@ class OrbStageStore {
   private slots = new Map<string, SlotRegistration>();
   private order: string[] = [];
   private listeners = new Set<() => void>();
+  private everActive = false;
   private version = 0;
 
   subscribe = (cb: () => void) => {
@@ -75,6 +82,7 @@ class OrbStageStore {
 
   register = (reg: SlotRegistration) => {
     this.slots.set(reg.id, reg);
+    this.everActive = true;
     this.order = this.order.filter((x) => x !== reg.id);
     this.order.push(reg.id);
     this.emit();
@@ -98,6 +106,7 @@ class OrbStageStore {
     }
     return null;
   };
+  hasEverActive = (): boolean => this.everActive;
 }
 
 const OrbApiContext = createContext<OrbStageApi | null>(null);
@@ -152,15 +161,15 @@ function OrbHost({ store }: { store: OrbStageStore }) {
     const container = containerRef.current;
     if (!container) return;
     const st = stRef.current;
+    let cancelled = false;
 
     const measure = (el: HTMLElement): Transform => {
       const r = el.getBoundingClientRect();
       return { tx: r.left, ty: r.top, s: r.width / BASE_SIZE };
     };
-    // Snap directly (0-duration) via anime.js so the element's transform model
-    // stays consistent with the animated transitions below.
+
     const snap = (t: Transform) => {
-      utils.set(container, { translateX: t.tx, translateY: t.ty, scale: t.s });
+      container.style.transform = `translate3d(${t.tx}px, ${t.ty}px, 0) scale(${t.s})`;
       container.style.opacity = "1";
       st.transform = t;
     };
@@ -179,7 +188,10 @@ function OrbHost({ store }: { store: OrbStageStore }) {
       st.hideTimer = setTimeout(() => {
         container.style.opacity = "0";
       }, 600);
-      return () => clearTimeout(st.hideTimer);
+      return () => {
+        cancelled = true;
+        clearTimeout(st.hideTimer);
+      };
     }
     clearTimeout(st.hideTimer);
 
@@ -201,15 +213,24 @@ function OrbHost({ store }: { store: OrbStageStore }) {
       st.transitioning = true;
       container.style.opacity = "1";
       st.transform = target;
-      st.anim = animate(container, {
-        translateX: target.tx,
-        translateY: target.ty,
-        scale: target.s,
-        ease: spring({ stiffness: 120, damping: 20, mass: 1 }),
-        onComplete: () => {
+      void import("animejs")
+        .then(({ animate, spring }) => {
+          if (cancelled) return;
+          st.anim = animate(container, {
+            translateX: target.tx,
+            translateY: target.ty,
+            scale: target.s,
+            ease: spring({ stiffness: 120, damping: 20, mass: 1 }),
+            onComplete: () => {
+              st.transitioning = false;
+            },
+          });
+        })
+        .catch(() => {
+          if (cancelled) return;
           st.transitioning = false;
-        },
-      });
+          snap(target);
+        });
     } else {
       // Same slot re-measured (its size/pos changed) → snap.
       snap(target);
@@ -229,6 +250,7 @@ function OrbHost({ store }: { store: OrbStageStore }) {
     window.addEventListener("scroll", sync, { passive: true });
     window.addEventListener("resize", sync);
     return () => {
+      cancelled = true;
       window.removeEventListener("scroll", sync);
       window.removeEventListener("resize", sync);
       if (raf) cancelAnimationFrame(raf);
@@ -256,12 +278,15 @@ function OrbHost({ store }: { store: OrbStageStore }) {
         willChange: "transform, opacity",
       }}
     >
-      <HugoOrbStage
-        state={active?.state ?? "idle"}
-        size={BASE_SIZE}
-        audioLevel={active?.audioLevel}
-        onClick={handleClick}
-      />
+      {(active || store.hasEverActive()) && (
+        <LazyHugoOrbStage
+          state={active?.state ?? "idle"}
+          size={BASE_SIZE}
+          audioLevel={active?.audioLevel}
+          active={!!active}
+          onClick={handleClick}
+        />
+      )}
     </div>
   );
 }

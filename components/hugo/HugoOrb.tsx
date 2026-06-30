@@ -16,6 +16,7 @@ import {
   type Timeline,
   type Timer,
 } from "animejs";
+import { useDocumentVisible } from "@/components/motion/useReducedMotion";
 import { cn } from "@/lib/utils";
 import type { HugoOrbState } from "@/lib/types";
 
@@ -116,12 +117,14 @@ export function HugoOrb({
   state = "idle",
   size = 280,
   audioLevel,
+  active = true,
   onClick,
   className,
 }: {
   state?: HugoOrbState;
   size?: number;
   audioLevel?: number;
+  active?: boolean;
   onClick?: () => void;
   className?: string;
 }) {
@@ -129,6 +132,8 @@ export function HugoOrb({
 
   const rootRef = useRef<HTMLDivElement | null>(null);
   const scopeRef = useRef<Scope | null>(null);
+  const pageVisible = useDocumentVisible();
+  const [inViewport, setInViewport] = useState(true);
 
   // Latest audio amplitude, read by the rAF loop without re-rendering. Kept
   // fresh via an effect (never written during render) for the lint rules.
@@ -148,12 +153,32 @@ export function HugoOrb({
   // controller for the new motion budget. Event-driven setState — not a render
   // or effect-time write — so it does not trip the set-state-in-effect rule.
   const [motionEpoch, setMotionEpoch] = useState(0);
+  const motionActive = active && pageVisible && inViewport;
+
+  useEffect(() => {
+    if (!active || typeof IntersectionObserver === "undefined") return;
+
+    const root = rootRef.current;
+    if (!root) return;
+
+    const io = new IntersectionObserver(
+      (entries) => {
+        const next = entries[0]?.isIntersecting ?? true;
+        setInViewport((prev) => (prev === next ? prev : next));
+      },
+      { threshold: 0.01 },
+    );
+    io.observe(root);
+    return () => io.disconnect();
+  }, [active]);
 
   // ── One-time scene setup: build every layer's idle/loop motion inside a scope.
   // The per-state controller (below) layers transitions on top of this. Runs in
   // the layout phase so the teardown's scope.revert() reads SVG geometry while
   // the orb is still connected (see useIsomorphicLayoutEffect note above).
   useIsomorphicLayoutEffect(() => {
+    if (!motionActive) return;
+
     const root = rootRef.current;
     if (!root) return;
 
@@ -267,13 +292,15 @@ export function HugoOrb({
       glowAnimRef.current = null;
       waveAnimRef.current = null;
     };
-  }, []);
+  }, [motionActive]);
 
   // ── Per-STATE controller. On each state change, smoothly transition the orb's
   // motion to that state. Stored handles are reverted before the next state runs.
   // Layout phase too: the cleanup reverts morphTo/drawable tweens that read SVG
   // geometry, so it must run before React detaches the orb on unmount.
   useIsomorphicLayoutEffect(() => {
+    if (!motionActive) return;
+
     const root = rootRef.current;
     if (!root) return;
 
@@ -553,11 +580,12 @@ export function HugoOrb({
       const el = q(".hugo-core-group");
       if (el) utils.set(el, { translateX: 0, translateY: 0 });
     };
-  }, [state, motionEpoch]);
+  }, [state, motionEpoch, motionActive]);
 
   // ── Audio-reactive rAF loop — runs only while listening/speaking. Reads the
   // latest amplitude from a ref and lerps animatable setters cheaply per frame.
   useEffect(() => {
+    if (!motionActive) return;
     if (!AUDIO_STATES.has(state)) return;
     if (reducedRef.current) return;
 
@@ -592,7 +620,7 @@ export function HugoOrb({
       glowAnimRef.current?.scale(1);
       waveAnimRef.current?.scaleY(0.4);
     };
-  }, [state, motionEpoch]);
+  }, [state, motionEpoch, motionActive]);
 
   const interactive = !!onClick;
 

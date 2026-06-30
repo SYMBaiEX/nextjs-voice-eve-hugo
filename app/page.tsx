@@ -31,18 +31,14 @@ const TECH_STACK = [
 ];
 
 export default async function LandingPage() {
-  // Resolve auth + the public guest-preview setting on the SERVER so the Hero's
-  // CTAs render their correct destination on first paint instead of flashing
-  // through the Convex auth-loading window on the client. Both are best-effort:
-  // a failure degrades to the unauthenticated/guarded defaults, never an error.
+  // Resolve just enough state on the server for a stable first paint without
+  // spending an extra Convex query on every authenticated homepage request.
+  // Protected routes still do the authoritative auth check server-side.
   const token = await convexAuthNextjsToken().catch(() => undefined);
-  const [me, settings] = await Promise.all([
-    token
-      ? fetchQuery(api.users.currentUser, {}, { token }).catch(() => null)
-      : Promise.resolve(null),
-    fetchQuery(api.settings.getPublic, {}).catch(() => null),
-  ]);
-  const initialAuthed = me != null;
+  const initialAuthed = token != null;
+  const settings = initialAuthed
+    ? null
+    : await fetchQuery(api.settings.getPublic, {}).catch(() => null);
   const guestPreviewEnabled = settings?.guestPreviewEnabled === true;
 
   return (

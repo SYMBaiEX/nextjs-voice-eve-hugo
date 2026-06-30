@@ -80,15 +80,24 @@ export const pendingApprovals = query({
     await requireAdmin(ctx);
     const rows = await ctx.db
       .query("toolCalls")
-      .withIndex("by_approvalStatus", (q) => q.eq("approvalStatus", "pending"))
+      .withIndex("by_approvalStatus_started", (q) =>
+        q.eq("approvalStatus", "pending"),
+      )
       .order("desc")
       .take(100);
-    return await Promise.all(
-      rows.map(async (r) => {
-        const owner = await ctx.db.get(r.userId);
-        return { ...r, ownerEmail: owner?.email ?? null };
-      }),
+    const ownerIds = [...new Set(rows.map((row) => row.userId))];
+    const ownerEmailById = new Map(
+      await Promise.all(
+        ownerIds.map(async (ownerId) => {
+          const owner = await ctx.db.get(ownerId);
+          return [ownerId, owner?.email ?? null] as const;
+        }),
+      ),
     );
+    return rows.map((r) => ({
+      ...r,
+      ownerEmail: ownerEmailById.get(r.userId) ?? null,
+    }));
   },
 });
 
@@ -102,12 +111,19 @@ export const listForAdmin = query({
       .withIndex("by_started")
       .order("desc")
       .take(Math.min(limit ?? 100, 500));
-    return await Promise.all(
-      rows.map(async (r) => {
-        const owner = await ctx.db.get(r.userId);
-        return { ...r, ownerEmail: owner?.email ?? null };
-      }),
+    const ownerIds = [...new Set(rows.map((row) => row.userId))];
+    const ownerEmailById = new Map(
+      await Promise.all(
+        ownerIds.map(async (ownerId) => {
+          const owner = await ctx.db.get(ownerId);
+          return [ownerId, owner?.email ?? null] as const;
+        }),
+      ),
     );
+    return rows.map((r) => ({
+      ...r,
+      ownerEmail: ownerEmailById.get(r.userId) ?? null,
+    }));
   },
 });
 

@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Input, Label } from "@/components/ui/input";
 import { Spinner } from "@/components/ui/misc";
 import { OrbSlot } from "@/components/hugo/OrbSlot";
+import { useAuthTransition } from "@/components/providers/ConvexClientProvider";
 
 type AuthMode = "signIn" | "signUp";
 
@@ -53,6 +54,7 @@ const COPY: Record<
  */
 export function AuthForm({ mode }: { mode: AuthMode }) {
   const { signIn } = useAuthActions();
+  const { clearSignOut } = useAuthTransition();
   const router = useRouter();
   const searchParams = useSearchParams();
   const copy = COPY[mode];
@@ -84,6 +86,7 @@ export function AuthForm({ mode }: { mode: AuthMode }) {
         password,
         ...(mode === "signUp" ? { name, flow: "signUp" } : { flow: "signIn" }),
       });
+      clearSignOut();
       const next = searchParams.get("next");
       router.push(next && next.startsWith("/") ? next : "/chat");
     } catch {

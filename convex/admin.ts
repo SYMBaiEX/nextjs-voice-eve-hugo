@@ -61,7 +61,9 @@ export const overview = query({
 
     const pendingTools = await ctx.db
       .query("toolCalls")
-      .withIndex("by_approvalStatus", (q) => q.eq("approvalStatus", "pending"))
+      .withIndex("by_approvalStatus_started", (q) =>
+        q.eq("approvalStatus", "pending"),
+      )
       .take(200);
 
     const errorEvents = await ctx.db

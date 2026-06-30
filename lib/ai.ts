@@ -39,12 +39,40 @@ export function getHugoInstructions(): string {
 }
 
 export type HugoMode = "voice" | "text";
+export type HugoTextCallKind = "chat" | "agent";
 
 interface SystemPromptOptions {
   mode?: HugoMode;
   userName?: string | null;
   memories?: { key: string; value: string }[];
   role?: "user" | "admin";
+}
+
+interface GatewayReportingOptions {
+  feature: HugoTextCallKind;
+  mode: HugoMode;
+  userId: string;
+  conversationId?: string | null;
+}
+
+interface HugoTextCallSettings {
+  maxOutputTokens: number;
+  maxRetries: number;
+  timeoutMs: number;
+}
+
+function readPositiveInt(value: string | undefined, fallback: number): number {
+  const parsed = Number.parseInt(value ?? "", 10);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
+}
+
+function normalizeGatewayTag(tag: string): string | null {
+  const normalized = tag
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9:_-]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+  return normalized ? normalized.slice(0, 64) : null;
 }
 
 /** Assemble the full system prompt for a turn, including per-user memory. */
@@ -78,6 +106,56 @@ export function buildHugoSystemPrompt(opts: SystemPromptOptions = {}): string {
   }
 
   return parts.join("\n");
+}
+
+export function getHugoTextCallSettings(
+  kind: HugoTextCallKind,
+): HugoTextCallSettings {
+  if (kind === "agent") {
+    return {
+      maxOutputTokens: readPositiveInt(
+        process.env.HUGO_AGENT_MAX_OUTPUT_TOKENS,
+        1200,
+      ),
+      maxRetries: readPositiveInt(process.env.HUGO_AGENT_MAX_RETRIES, 1),
+      timeoutMs: readPositiveInt(process.env.HUGO_AGENT_TIMEOUT_MS, 30_000),
+    };
+  }
+
+  return {
+    maxOutputTokens: readPositiveInt(
+      process.env.HUGO_CHAT_MAX_OUTPUT_TOKENS,
+      900,
+    ),
+    maxRetries: readPositiveInt(process.env.HUGO_CHAT_MAX_RETRIES, 1),
+    timeoutMs: readPositiveInt(process.env.HUGO_CHAT_TIMEOUT_MS, 25_000),
+  };
+}
+
+export function buildHugoGatewayProviderOptions({
+  feature,
+  mode,
+  userId,
+  conversationId,
+}: GatewayReportingOptions): {
+  gateway: { caching: "auto"; tags: string[]; user: string };
+} {
+  const tags = [
+    "app:hugo",
+    `feature:${feature}`,
+    `mode:${mode}`,
+    conversationId ? `conversation:${conversationId}` : null,
+  ]
+    .map((tag) => (tag ? normalizeGatewayTag(tag) : null))
+    .filter((tag): tag is string => !!tag);
+
+  return {
+    gateway: {
+      caching: "auto",
+      tags,
+      user: userId,
+    },
+  };
 }
 
 /** Default models + voice, env-driven with production-safe fallbacks. */

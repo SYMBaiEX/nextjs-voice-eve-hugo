@@ -2,6 +2,13 @@ import { NextResponse } from "next/server";
 import { fetchQuery, authToken } from "@/lib/convex-server";
 import { api } from "@/convex/_generated/api";
 
+export const dynamic = "force-dynamic";
+
+const HEALTH_RESPONSE_HEADERS = {
+  "Cache-Control": "private, no-store, max-age=0",
+  Vary: "Cookie",
+} as const;
+
 /**
  * GET /api/admin/health (PRD 5.11)
  *
@@ -11,16 +18,25 @@ import { api } from "@/convex/_generated/api";
 export async function GET() {
   const token = await authToken();
   if (!token) {
-    return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 });
+    return NextResponse.json(
+      { ok: false, error: "Unauthorized" },
+      { status: 401, headers: HEALTH_RESPONSE_HEADERS },
+    );
   }
   try {
     const health = await fetchQuery(api.admin.health, {}, { token });
-    return NextResponse.json({
-      ok: true,
-      time: health.time,
-      gatewayConfigured: !!process.env.AI_GATEWAY_API_KEY,
-    });
+    return NextResponse.json(
+      {
+        ok: true,
+        time: health.time,
+        gatewayConfigured: !!process.env.AI_GATEWAY_API_KEY,
+      },
+      { headers: HEALTH_RESPONSE_HEADERS },
+    );
   } catch {
-    return NextResponse.json({ ok: false, error: "Forbidden" }, { status: 403 });
+    return NextResponse.json(
+      { ok: false, error: "Forbidden" },
+      { status: 403, headers: HEALTH_RESPONSE_HEADERS },
+    );
   }
 }

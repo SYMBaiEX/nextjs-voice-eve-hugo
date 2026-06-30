@@ -1,6 +1,7 @@
 "use client";
 
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { useMutation, useQuery } from "convex/react";
 import {
   Brain,
@@ -28,6 +29,7 @@ import { Badge } from "@/components/ui/badge";
 import { Input, Label } from "@/components/ui/input";
 import { Separator, Skeleton, Spinner } from "@/components/ui/misc";
 import { cn, formatUsd } from "@/lib/utils";
+import { useAuthTransition } from "@/components/providers/ConvexClientProvider";
 
 /**
  * SettingsClient — profile, preferences, usage, and memory (PRD 5.1, 5.9, 5.16).
@@ -166,15 +168,37 @@ function UsageBar({
 }
 
 export function SettingsClient() {
-  const me = useQuery(api.users.currentUser);
-  const usage = useQuery(api.usageEvents.todayForUser);
-  const memories = useQuery(api.memories.listOwn) as MemoryDoc[] | undefined;
+  const router = useRouter();
+  const {
+    canRunProtectedQueries,
+    isAuthenticated,
+    isAuthLoading,
+    isSigningOut,
+  } = useAuthTransition();
+  const me = useQuery(
+    api.users.currentUser,
+    canRunProtectedQueries ? {} : "skip",
+  );
+  const usage = useQuery(
+    api.usageEvents.todayForUser,
+    canRunProtectedQueries ? {} : "skip",
+  );
+  const memories = useQuery(
+    api.memories.listOwn,
+    canRunProtectedQueries ? {} : "skip",
+  ) as MemoryDoc[] | undefined;
 
   const updatePreferences = useMutation(api.users.updatePreferences);
   const upsertMemory = useMutation(api.memories.upsert);
   const removeMemory = useMutation(api.memories.remove);
 
   const [savingPref, setSavingPref] = useState(false);
+
+  useEffect(() => {
+    if (!isSigningOut && !isAuthLoading && !isAuthenticated) {
+      router.replace("/sign-in");
+    }
+  }, [isAuthenticated, isAuthLoading, isSigningOut, router]);
 
   const prefs = me?.preferences ?? {};
 
@@ -184,6 +208,7 @@ export function SettingsClient() {
       conciseVoice?: boolean;
       reducedMotion?: boolean;
     }) => {
+      if (!canRunProtectedQueries) return;
       setSavingPref(true);
       try {
         await updatePreferences({ preferences: patch });
@@ -193,7 +218,7 @@ export function SettingsClient() {
         setSavingPref(false);
       }
     },
-    [updatePreferences],
+    [canRunProtectedQueries, updatePreferences],
   );
 
   // ---- Memory add form ----
@@ -206,6 +231,7 @@ export function SettingsClient() {
     const key = memKey.trim();
     const value = memValue.trim();
     if (!key || !value) return;
+    if (!canRunProtectedQueries) return;
     setAddingMemory(true);
     try {
       await upsertMemory({ type: memType, key, value });
@@ -217,10 +243,11 @@ export function SettingsClient() {
     } finally {
       setAddingMemory(false);
     }
-  }, [memKey, memValue, memType, upsertMemory]);
+  }, [canRunProtectedQueries, memKey, memValue, memType, upsertMemory]);
 
   const deleteMemory = useCallback(
     async (id: Id<"memories">) => {
+      if (!canRunProtectedQueries) return;
       try {
         await removeMemory({ memoryId: id });
         toast.success("Memory removed.");
@@ -228,8 +255,16 @@ export function SettingsClient() {
         toast.error("Couldn't remove that memory.");
       }
     },
-    [removeMemory],
+    [canRunProtectedQueries, removeMemory],
   );
+
+  if (isSigningOut || (!isAuthLoading && !isAuthenticated)) {
+    return (
+      <div className="panel flex min-h-[24rem] items-center justify-center p-6 text-sm text-text-secondary">
+        {isSigningOut ? "Signing out..." : "Redirecting to sign in..."}
+      </div>
+    );
+  }
 
   return (
     <div className="flex flex-col gap-6">
