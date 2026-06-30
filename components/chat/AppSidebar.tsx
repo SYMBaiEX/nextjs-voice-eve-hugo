@@ -152,7 +152,7 @@ export function AppSidebar({
           onClick={onNew}
           disabled={creating}
           className={cn(
-            "flex h-9 w-full items-center gap-2 rounded-lg border border-border bg-surface-elevated/40 px-3 text-sm font-medium text-text-secondary transition-colors outline-none hover:bg-surface-elevated hover:text-text-primary focus-visible:ring-2 focus-visible:ring-hugo-cyan/50 disabled:opacity-50",
+            "flex h-9 w-full items-center gap-2 rounded-lg px-3 text-sm font-medium text-text-secondary transition-colors outline-none hover:bg-surface-elevated hover:text-text-primary focus-visible:ring-2 focus-visible:ring-hugo-cyan/50 disabled:opacity-50",
             collapsed && "lg:hidden",
           )}
         >

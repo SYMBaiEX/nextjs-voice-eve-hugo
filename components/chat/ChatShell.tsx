@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useMutation } from "convex/react";
-import { Menu, PanelLeft } from "lucide-react";
+import { Menu } from "lucide-react";
 import { toast } from "sonner";
 import { api } from "@/convex/_generated/api";
 import { HugoSurface } from "@/components/hugo/HugoSurface";
@@ -102,8 +102,8 @@ export function ChatShell({ collapsedInitial }: { collapsedInitial: boolean }) {
       )}
 
       <main className="relative flex min-w-0 flex-1 flex-col">
-        {/* Slim top bar: mobile menu + (desktop) expand toggle when collapsed */}
-        <div className="flex h-12 shrink-0 items-center gap-1 px-3">
+        {/* Slim top bar: mobile menu only (desktop expand lives in the sidebar rail) */}
+        <div className="flex h-12 shrink-0 items-center gap-1 px-3 lg:h-3">
           <button
             type="button"
             onClick={() => setMobileOpen(true)}
@@ -112,16 +112,6 @@ export function ChatShell({ collapsedInitial }: { collapsedInitial: boolean }) {
           >
             <Menu aria-hidden className="size-4" />
           </button>
-          {collapsed && (
-            <button
-              type="button"
-              onClick={toggleCollapsed}
-              aria-label="Expand sidebar"
-              className="hidden size-8 items-center justify-center rounded-md text-text-muted transition-colors hover:bg-surface-elevated hover:text-text-primary lg:inline-flex"
-            >
-              <PanelLeft aria-hidden className="size-4" />
-            </button>
-          )}
         </div>
 
         {/* Hugo surface */}

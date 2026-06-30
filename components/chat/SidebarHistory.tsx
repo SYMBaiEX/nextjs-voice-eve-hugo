@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useMutation } from "convex/react";
-import { MoreHorizontal, Pencil, Trash2 } from "lucide-react";
+import { ChevronDown, MoreHorizontal, Pencil, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
@@ -73,6 +73,17 @@ export function SidebarHistory({
     return groupByRecency(items);
   }, [items, searchResults]);
 
+  // Collapsed day-groups (by label). Default: all expanded.
+  const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
+  const toggleGroup = useCallback((label: string) => {
+    setCollapsed((prev) => {
+      const next = new Set(prev);
+      if (next.has(label)) next.delete(label);
+      else next.add(label);
+      return next;
+    });
+  }, []);
+
   if (groups.length === 0) {
     return (
       <p className="px-3 py-6 text-center text-xs text-text-muted">
@@ -84,22 +95,39 @@ export function SidebarHistory({
   }
 
   return (
-    <div className="flex flex-col gap-3">
-      {groups.map((group) => (
-        <div key={group.label} className="flex flex-col gap-0.5">
-          <p className="px-2 pb-1 text-[0.65rem] font-mono uppercase tracking-wider text-text-muted/80">
-            {group.label}
-          </p>
-          {group.items.map((c) => (
-            <ConversationRow
-              key={c._id}
-              conversation={c}
-              active={c._id === activeId}
-              onSelect={onSelect}
-            />
-          ))}
-        </div>
-      ))}
+    <div className="flex flex-col gap-2">
+      {groups.map((group) => {
+        const isCollapsed = collapsed.has(group.label);
+        return (
+          <div key={group.label} className="flex flex-col gap-0.5">
+            <button
+              type="button"
+              onClick={() => toggleGroup(group.label)}
+              aria-expanded={!isCollapsed}
+              className="flex items-center gap-1 rounded-md px-2 py-1 text-[0.65rem] font-mono uppercase tracking-wider text-text-muted/80 transition-colors outline-none hover:text-text-secondary focus-visible:ring-2 focus-visible:ring-hugo-cyan/40"
+            >
+              <ChevronDown
+                aria-hidden
+                className={cn(
+                  "size-3 transition-transform",
+                  isCollapsed && "-rotate-90",
+                )}
+              />
+              {group.label}
+              <span className="text-text-muted/50">{group.items.length}</span>
+            </button>
+            {!isCollapsed &&
+              group.items.map((c) => (
+                <ConversationRow
+                  key={c._id}
+                  conversation={c}
+                  active={c._id === activeId}
+                  onSelect={onSelect}
+                />
+              ))}
+          </div>
+        );
+      })}
     </div>
   );
 }
@@ -210,11 +238,11 @@ function ConversationRow({
         onClick={() => onSelect(conversation._id)}
         aria-current={active ? "true" : undefined}
         className={cn(
-          "flex w-full items-center gap-2 rounded-md border px-2.5 py-2 text-left text-sm transition-colors outline-none",
+          "flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-left text-sm transition-colors outline-none",
           "focus-visible:ring-2 focus-visible:ring-hugo-cyan/50",
           active
-            ? "border-hugo-cyan/30 bg-hugo-cyan/[0.06] text-text-primary"
-            : "border-transparent text-text-secondary hover:border-border hover:bg-surface-elevated/50 hover:text-text-primary",
+            ? "bg-surface-elevated text-text-primary"
+            : "text-text-secondary hover:bg-surface-elevated/60 hover:text-text-primary",
         )}
       >
         <span className="line-clamp-1 flex-1">{conversation.title}</span>

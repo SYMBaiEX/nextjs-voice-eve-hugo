@@ -129,7 +129,8 @@ export function ModelMenu() {
   );
 
   return (
-    <div ref={ref} className="relative">
+    <div ref={ref} className="relative w-fit">
+      {/* Styled as a card tab attached to the top of the composer below it. */}
       <button
         type="button"
         onClick={() => {
@@ -140,8 +141,8 @@ export function ModelMenu() {
         aria-expanded={open}
         aria-label="Select model"
         className={cn(
-          "flex items-center gap-1.5 rounded-full border border-border bg-surface/60 px-2.5 py-1 text-xs text-text-secondary transition-colors outline-none hover:border-border-strong hover:text-text-primary focus-visible:ring-2 focus-visible:ring-hugo-cyan/50",
-          open && "border-border-strong text-text-primary",
+          "relative z-10 -mb-px flex items-center gap-1.5 rounded-t-lg border border-b-0 border-border bg-surface-elevated/50 px-3 py-1.5 text-xs text-text-secondary backdrop-blur-sm transition-colors outline-none hover:text-text-primary focus-visible:ring-2 focus-visible:ring-hugo-cyan/50",
+          open && "text-text-primary",
         )}
       >
         <Cpu aria-hidden className="size-3.5 text-text-muted" />

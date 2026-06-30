@@ -23,7 +23,7 @@ import {
   HugoTranscript,
   type TranscriptMessage,
 } from "@/components/hugo/HugoTranscript";
-import { Greeting } from "@/components/chat/Greeting";
+import { SuggestionChips } from "@/components/chat/Greeting";
 import { ModelMenu } from "@/components/hugo/ModelMenu";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/input";
@@ -423,14 +423,22 @@ function HugoSurfaceInner({
 
   return (
     <div className={cn("relative flex h-full flex-col", className)}>
-      {/* Hero orb — only while voice is live, centered near the top. */}
-      {voiceActive && (
-        <div className="pointer-events-none absolute inset-x-0 top-4 z-10 flex justify-center">
+      {/* Hero orb — centered in the top half while voice is live OR on a fresh
+          conversation (click it to start voice). Shrinks to a corner otherwise. */}
+      {(voiceActive || isEmpty) && (
+        <div
+          className={cn(
+            "absolute inset-x-0 z-10 flex justify-center",
+            voiceActive ? "pointer-events-none top-4" : "top-[4%]",
+          )}
+          title={isEmpty ? "Talk to Hugo" : undefined}
+        >
           <OrbSlot
             presence="hero"
             state={orbState}
-            size={260}
+            size={voiceActive ? 260 : 340}
             audioLevel={rt.audioLevel}
+            onClick={isEmpty ? () => void startVoice() : undefined}
           />
         </div>
       )}
@@ -438,8 +446,20 @@ function HugoSurfaceInner({
       {/* Transcript / greeting */}
       <div className="relative min-h-0 flex-1">
         {isEmpty ? (
-          <div className="grid h-full place-items-center px-4">
-            <Greeting
+          <div className="flex h-full flex-col items-center px-4 pb-2 text-center">
+            {/* Orb floats in the top half (rendered absolutely); push the
+                greeting + chips down toward the composer. */}
+            <div className="flex-1" aria-hidden />
+            <div className="animate-rise">
+              <h1 className="text-3xl font-semibold tracking-tight text-text-primary">
+                What can I help with?
+              </h1>
+              <p className="mt-1.5 text-sm text-text-muted">
+                Ask a question, talk it through, or pick one to start.
+              </p>
+            </div>
+            <SuggestionChips
+              className="mt-6"
               onPick={(t) => {
                 setInput(t);
                 textareaRef.current?.focus();
@@ -467,8 +487,10 @@ function HugoSurfaceInner({
           </div>
         )}
 
-        {/* Corner orb — small ambient presence; click to start voice. */}
-        {!voiceActive && (
+        {/* Corner orb — small ambient presence in an active text conversation;
+            click to start voice. (Hidden on the empty state, where the orb is
+            the centered hero.) */}
+        {!voiceActive && !isEmpty && (
           <div
             className="absolute right-4 top-2 z-10 cursor-pointer"
             title="Talk to Hugo"
@@ -512,14 +534,18 @@ function HugoSurfaceInner({
             </div>
           )}
 
+          {/* Model selector — a card tab attached to the top-left of the input */}
+          <div className="ml-3 flex">
+            <ModelMenu />
+          </div>
+
           <form
             onSubmit={(e) => {
               e.preventDefault();
               submitText();
             }}
-            className="flex flex-col gap-1.5 rounded-2xl border border-border bg-surface-elevated/50 p-2 backdrop-blur-sm focus-within:border-hugo-cyan/40"
+            className="flex items-end gap-2 rounded-2xl border border-border bg-surface-elevated/50 p-2 backdrop-blur-sm focus-within:border-hugo-cyan/40"
           >
-            <div className="flex items-end gap-2">
             {/* Mic toggle */}
             <Button
               type="button"
@@ -567,12 +593,6 @@ function HugoSurfaceInner({
                 <SendHorizontal aria-hidden />
               </Button>
             )}
-            </div>
-
-            {/* Composer toolbar */}
-            <div className="flex items-center gap-2 px-1">
-              <ModelMenu />
-            </div>
           </form>
 
           {isStreaming && (

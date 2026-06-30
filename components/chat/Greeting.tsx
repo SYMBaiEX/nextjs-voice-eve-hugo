@@ -3,9 +3,8 @@
 import { cn } from "@/lib/utils";
 
 /**
- * Greeting — the empty-state hero for a fresh conversation.
- *
- * A centered prompt plus a few suggested actions that prefill the composer.
+ * SuggestionChips — compact, low-intrusion starter prompts shown just above the
+ * composer on a fresh conversation. They prefill the input on click.
  */
 
 const SUGGESTIONS = [
@@ -15,7 +14,7 @@ const SUGGESTIONS = [
   "What are my saved preferences?",
 ];
 
-export function Greeting({
+export function SuggestionChips({
   onPick,
   className,
 }: {
@@ -25,31 +24,20 @@ export function Greeting({
   return (
     <div
       className={cn(
-        "animate-rise flex w-full max-w-2xl flex-col items-center gap-6 text-center",
+        "flex flex-wrap items-center justify-center gap-1.5",
         className,
       )}
     >
-      <div className="space-y-2">
-        <h1 className="text-3xl font-semibold tracking-tight text-text-primary">
-          What can I help with?
-        </h1>
-        <p className="text-sm text-text-muted">
-          Ask a question, talk it through, or pick one to start.
-        </p>
-      </div>
-
-      <div className="grid w-full grid-cols-1 gap-2 sm:grid-cols-2">
-        {SUGGESTIONS.map((s) => (
-          <button
-            key={s}
-            type="button"
-            onClick={() => onPick(s)}
-            className="rounded-xl border border-border bg-surface/40 px-4 py-3 text-left text-sm text-text-secondary transition-colors outline-none hover:border-hugo-cyan/30 hover:bg-surface-elevated/50 hover:text-text-primary focus-visible:ring-2 focus-visible:ring-hugo-cyan/50"
-          >
-            {s}
-          </button>
-        ))}
-      </div>
+      {SUGGESTIONS.map((s) => (
+        <button
+          key={s}
+          type="button"
+          onClick={() => onPick(s)}
+          className="rounded-full border border-border/60 bg-surface/30 px-3 py-1.5 text-xs text-text-muted transition-colors outline-none hover:border-hugo-cyan/30 hover:bg-surface-elevated/50 hover:text-text-secondary focus-visible:ring-2 focus-visible:ring-hugo-cyan/40"
+        >
+          {s}
+        </button>
+      ))}
     </div>
   );
 }
