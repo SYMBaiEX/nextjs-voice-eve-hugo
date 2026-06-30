@@ -76,6 +76,9 @@ export function HugoAmbientField({
 
     (async () => {
       try {
+        const adapter = await navigator.gpu.requestAdapter();
+        if (disposed || !adapter) return;
+
         const [{ default: tgpu }, data, common] = await Promise.all([
           import("typegpu"),
           import("typegpu/data"),

@@ -17,14 +17,23 @@ const typeValidator = v.union(
 
 /** The current user's active (non-archived) memories. */
 export const listOwn = query({
-  args: {},
-  handler: async (ctx) => {
+  args: { type: v.optional(typeValidator), limit: v.optional(v.number()) },
+  handler: async (ctx, { type, limit }) => {
     const user = await requireUser(ctx);
-    const rows = await ctx.db
-      .query("memories")
-      .withIndex("by_user", (q) => q.eq("userId", user._id))
-      .order("desc")
-      .take(500);
+    const maxRows = Math.min(limit ?? 50, 200);
+    const rows = type
+      ? await ctx.db
+          .query("memories")
+          .withIndex("by_user_type", (q) =>
+            q.eq("userId", user._id).eq("type", type),
+          )
+          .order("desc")
+          .take(maxRows)
+      : await ctx.db
+          .query("memories")
+          .withIndex("by_user", (q) => q.eq("userId", user._id))
+          .order("desc")
+          .take(maxRows);
     return rows.filter((m) => m.archivedAt === undefined);
   },
 });

@@ -238,6 +238,15 @@ export function HugoOrb({
         // 4. Scan arcs sweep around the dial.
         animate(".hugo-scan-a", { rotate: "1turn", transformOrigin: "200px 200px", loop: true, duration: 9000, ease: "linear" });
         animate(".hugo-scan-b", { rotate: "-1turn", transformOrigin: "200px 200px", loop: true, duration: 13000, ease: "linear" });
+        animate(".hugo-liquid-flow", { rotate: "1turn", transformOrigin: "200px 200px", loop: true, duration: 18000, ease: "linear" });
+        animate(".hugo-liquid-counterflow", { rotate: "-1turn", transformOrigin: "200px 200px", loop: true, duration: 24000, ease: "linear" });
+        animate(".hugo-glass-highlight", {
+          opacity: [0.45, 0.9],
+          duration: 3200,
+          alternate: true,
+          loop: true,
+          ease: "inOutSine",
+        });
 
         // 5. Orbiting nodes bound to invisible orbit paths via motion paths.
         // svg.createMotionPath / createDrawable call getPointAtLength/
@@ -687,13 +696,46 @@ export function HugoOrb({
             <stop offset="32%" stopColor={style.color} />
             <stop offset="100%" stopColor="rgba(0,0,0,0.55)" />
           </radialGradient>
+          <radialGradient id="hugo-liquid-depth" cx="36%" cy="28%" r="76%">
+            <stop offset="0%" stopColor="rgba(255,255,255,0.98)" />
+            <stop offset="20%" stopColor="rgba(224,252,255,0.9)" />
+            <stop offset="48%" stopColor={style.color} stopOpacity="0.82" />
+            <stop offset="72%" stopColor="rgba(7,89,133,0.62)" />
+            <stop offset="100%" stopColor="rgba(2,6,23,0.82)" />
+          </radialGradient>
+          <radialGradient id="hugo-liquid-rim" cx="50%" cy="50%" r="52%">
+            <stop offset="0%" stopColor="rgba(255,255,255,0)" />
+            <stop offset="70%" stopColor="rgba(255,255,255,0)" />
+            <stop offset="88%" stopColor="rgba(255,255,255,0.55)" />
+            <stop offset="100%" stopColor={style.color} stopOpacity="0.72" />
+          </radialGradient>
+          <linearGradient id="hugo-liquid-sheen" x1="134" y1="144" x2="270" y2="256" gradientUnits="userSpaceOnUse">
+            <stop offset="0%" stopColor="rgba(255,255,255,0.92)" />
+            <stop offset="40%" stopColor={style.color} stopOpacity="0.38" />
+            <stop offset="100%" stopColor="rgba(255,255,255,0.74)" />
+          </linearGradient>
+          <linearGradient id="hugo-liquid-blue-ribbon" x1="138" y1="238" x2="272" y2="158" gradientUnits="userSpaceOnUse">
+            <stop offset="0%" stopColor="rgba(14,165,233,0.12)" />
+            <stop offset="42%" stopColor={style.color} stopOpacity="0.78" />
+            <stop offset="100%" stopColor="rgba(255,255,255,0.75)" />
+          </linearGradient>
           <radialGradient id="hugo-core-inner" cx="50%" cy="50%" r="50%">
             <stop offset="0%" stopColor="rgba(255,255,255,0.0)" />
             <stop offset="78%" stopColor="rgba(255,255,255,0.0)" />
             <stop offset="100%" stopColor={style.color} stopOpacity="0.5" />
           </radialGradient>
+          <clipPath id="hugo-liquid-clip">
+            <circle cx={C} cy={C} r={64} />
+          </clipPath>
           <filter id="hugo-soft" x="-40%" y="-40%" width="180%" height="180%">
             <feGaussianBlur stdDeviation="1.2" />
+          </filter>
+          <filter id="hugo-liquid-blur" x="-30%" y="-30%" width="160%" height="160%">
+            <feGaussianBlur stdDeviation="1.8" />
+          </filter>
+          <filter id="hugo-glass-shadow" x="-40%" y="-40%" width="180%" height="180%">
+            <feDropShadow dx="0" dy="9" stdDeviation="8" floodColor="rgba(0,0,0,0.46)" />
+            <feDropShadow dx="-7" dy="-9" stdDeviation="7" floodColor="rgba(255,255,255,0.12)" />
           </filter>
           {/* Hidden waveform morph targets. */}
           <path id="hugo-wave-flat" d={WAVE_FLAT} />
@@ -809,10 +851,66 @@ export function HugoOrb({
 
         {/* 6. Core sphere (group is the audio/breathing scale target). */}
         <g className="hugo-core-group" style={{ transformOrigin: "200px 200px" }}>
-          <circle cx={C} cy={C} r={62} fill="url(#hugo-core-grad)" />
-          <circle cx={C} cy={C} r={62} fill="url(#hugo-core-inner)" />
-          {/* Specular highlight. */}
-          <ellipse cx={182} cy={178} rx={18} ry={12} fill="rgba(255,255,255,0.85)" filter="url(#hugo-soft)" opacity={0.8} />
+          <circle cx={C} cy={C} r={64} fill="url(#hugo-liquid-depth)" filter="url(#hugo-glass-shadow)" />
+          <g clipPath="url(#hugo-liquid-clip)">
+            <g className="hugo-liquid-flow" style={{ transformOrigin: "200px 200px" }}>
+              <path
+                d="M 132 205 C 154 164 184 147 212 158 C 241 169 261 194 273 230"
+                fill="none"
+                stroke="url(#hugo-liquid-sheen)"
+                strokeWidth={16}
+                strokeLinecap="round"
+                opacity={0.56}
+                filter="url(#hugo-liquid-blur)"
+              />
+              <path
+                d="M 143 235 C 166 210 193 200 218 206 C 241 212 258 229 270 251"
+                fill="none"
+                stroke="rgba(255,255,255,0.62)"
+                strokeWidth={6}
+                strokeLinecap="round"
+                opacity={0.62}
+              />
+            </g>
+            <g className="hugo-liquid-counterflow" style={{ transformOrigin: "200px 200px" }}>
+              <path
+                d="M 260 166 C 231 178 210 197 194 220 C 181 239 160 249 137 245"
+                fill="none"
+                stroke="url(#hugo-liquid-blue-ribbon)"
+                strokeWidth={12}
+                strokeLinecap="round"
+                opacity={0.58}
+                filter="url(#hugo-soft)"
+              />
+              <path
+                d="M 153 164 C 180 181 197 196 203 216 C 209 238 225 252 251 258"
+                fill="none"
+                stroke="rgba(2,132,199,0.62)"
+                strokeWidth={7}
+                strokeLinecap="round"
+                opacity={0.5}
+              />
+            </g>
+            <path
+              d="M 151 159 C 172 136 210 128 238 149 C 218 154 203 164 191 181 C 178 176 166 169 151 159 Z"
+              fill="rgba(255,255,255,0.5)"
+              opacity={0.68}
+              filter="url(#hugo-soft)"
+            />
+            <path
+              d="M 222 238 C 238 221 257 217 272 228 C 266 249 250 263 226 270 C 232 257 231 247 222 238 Z"
+              fill="rgba(255,255,255,0.42)"
+              opacity={0.54}
+              filter="url(#hugo-soft)"
+            />
+          </g>
+          <circle cx={C} cy={C} r={64} fill="url(#hugo-liquid-rim)" />
+          <circle cx={C} cy={C} r={64} fill="none" stroke="rgba(255,255,255,0.62)" strokeWidth={1.2} opacity={0.7} />
+          <circle cx={C} cy={C} r={58} fill="url(#hugo-core-inner)" opacity={0.72} />
+          {/* Specular highlights. */}
+          <ellipse className="hugo-glass-highlight" cx={181} cy={176} rx={19} ry={12} fill="rgba(255,255,255,0.92)" filter="url(#hugo-soft)" opacity={0.82} />
+          <ellipse cx={224} cy={166} rx={18} ry={8} fill="rgba(255,255,255,0.36)" filter="url(#hugo-soft)" opacity={0.55} transform="rotate(28 224 166)" />
+          <ellipse cx={234} cy={235} rx={10} ry={23} fill="rgba(255,255,255,0.22)" filter="url(#hugo-soft)" opacity={0.5} transform="rotate(42 234 235)" />
 
           {/* 7. Waveform ribbon across the core. */}
           <g className="hugo-wave-wrap" style={{ opacity: 0 }}>

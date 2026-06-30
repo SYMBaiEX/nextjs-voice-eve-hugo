@@ -9,6 +9,12 @@ import { track } from "@/lib/telemetry";
 import { rateLimit } from "@/lib/rate-limit";
 import { REALTIME_TOKEN_RATE } from "@/lib/constants";
 
+const NO_STORE_HEADERS = {
+  "Cache-Control": "no-store",
+  "Vercel-CDN-Cache-Control": "no-store",
+  "CDN-Cache-Control": "no-store",
+} as const;
+
 /**
  * POST /api/voice/session/start (PRD 5.4, 5.11)
  *
@@ -19,7 +25,10 @@ import { REALTIME_TOKEN_RATE } from "@/lib/constants";
 export async function POST(req: Request) {
   const token = await authToken();
   if (!token) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    return NextResponse.json(
+      { error: "Unauthorized" },
+      { status: 401, headers: NO_STORE_HEADERS },
+    );
   }
 
   let body: { conversationId?: string } = {};
@@ -31,7 +40,10 @@ export async function POST(req: Request) {
 
   const me = await fetchQuery(api.users.currentUser, {}, { token });
   if (!me) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    return NextResponse.json(
+      { error: "Unauthorized" },
+      { status: 401, headers: NO_STORE_HEADERS },
+    );
   }
 
   const limit = rateLimit(
@@ -45,7 +57,10 @@ export async function POST(req: Request) {
       { error: "Too many session attempts. Slow down a moment." },
       {
         status: 429,
-        headers: { "Retry-After": String(Math.ceil(limit.retryAfterMs / 1000)) },
+        headers: {
+          ...NO_STORE_HEADERS,
+          "Retry-After": String(Math.ceil(limit.retryAfterMs / 1000)),
+        },
       },
     );
   }
@@ -53,7 +68,7 @@ export async function POST(req: Request) {
   if (!isAiConfigured()) {
     return NextResponse.json(
       { error: "Realtime voice is not configured. Try text chat instead." },
-      { status: 503 },
+      { status: 503, headers: NO_STORE_HEADERS },
     );
   }
 
@@ -67,7 +82,7 @@ export async function POST(req: Request) {
   ) {
     return NextResponse.json(
       { error: "Daily voice limit reached. Try text chat or come back tomorrow." },
-      { status: 429 },
+      { status: 429, headers: NO_STORE_HEADERS },
     );
   }
 
@@ -78,7 +93,7 @@ export async function POST(req: Request) {
   if (runtime?.maintenanceMode && me?.role !== "admin") {
     return NextResponse.json(
       { error: "Hugo is in maintenance mode. Please try again shortly." },
-      { status: 503 },
+      { status: 503, headers: NO_STORE_HEADERS },
     );
   }
 
@@ -114,12 +129,15 @@ export async function POST(req: Request) {
 
   track("voice_session_started", { model, userId: me._id, voice });
 
-  return NextResponse.json({
-    conversationId,
-    voiceSessionId,
-    model,
-    voice,
-    sessionConfig: { voice, turnDetection: { type: "server-vad" } },
-    tools: clientSafeTools("user"),
-  });
+  return NextResponse.json(
+    {
+      conversationId,
+      voiceSessionId,
+      model,
+      voice,
+      sessionConfig: { voice, turnDetection: { type: "server-vad" } },
+      tools: clientSafeTools("user"),
+    },
+    { headers: NO_STORE_HEADERS },
+  );
 }

@@ -173,6 +173,19 @@ export const listOwn = query({
   },
 });
 
+/** Owner-safe lookup used by the realtime token route to validate session
+ *  ownership and keep the browser payload aligned with the persisted session. */
+export const getOwn = query({
+  args: { voiceSessionId: v.id("voiceSessions") },
+  handler: async (ctx, { voiceSessionId }) => {
+    const user = await requireUser(ctx);
+    const session = await ctx.db.get(voiceSessionId);
+    if (!session) return null;
+    assertOwnerOrAdmin(user, session.userId);
+    return session;
+  },
+});
+
 // ---- Admin ----------------------------------------------------------------
 
 export const listForAdmin = query({

@@ -28,7 +28,7 @@
   --grid-line: rgba(0, 0, 0, 0.035);
   --glow: rgba(8, 145, 178, 0.18);
 
-  --radius: 0.75rem;
+  --radius: 0px;
 }
 
 .dark {
@@ -116,7 +116,7 @@ body {
 .panel {
   background: color-mix(in oklab, var(--surface) 92%, transparent);
   border: 1px solid var(--border);
-  border-radius: var(--radius);
+  border-radius: 0;
   backdrop-filter: blur(12px);
 }
 
@@ -131,7 +131,7 @@ body {
 }
 .scroll-thin::-webkit-scrollbar-thumb {
   background: var(--border-strong);
-  border-radius: 999px;
+  border-radius: 0;
 }
 .scroll-thin::-webkit-scrollbar-track {
   background: transparent;

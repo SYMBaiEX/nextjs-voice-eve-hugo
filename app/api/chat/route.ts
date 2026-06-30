@@ -181,7 +181,7 @@ export async function POST(req: Request) {
       model,
       system,
       messages: modelMessages,
-      tools: buildHugoTools({ token, conversationId }),
+      tools: buildHugoTools({ token, conversationId, role: me.role }),
       stopWhen: stepCountIs(5),
       maxOutputTokens: callSettings.maxOutputTokens,
       maxRetries: callSettings.maxRetries,

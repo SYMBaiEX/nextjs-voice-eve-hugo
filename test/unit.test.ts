@@ -173,9 +173,8 @@ describe("lib/utils", () => {
 describe("agent/hugo/tools/registry", () => {
   const ALLOWED_KEYS = ["name", "description", "requiresApproval"].sort();
 
-  test("clientSafeTools('user') returns exactly the 5 user tools", () => {
+  test("clientSafeTools('user') returns the registered user tools", () => {
     const tools = clientSafeTools("user");
-    expect(tools).toHaveLength(5);
     expect(tools).toHaveLength(USER_TOOLS.length);
     expect(tools.map((t) => t.name).sort()).toEqual(
       USER_TOOLS.map((t) => t.name).sort(),
@@ -208,9 +207,8 @@ describe("agent/hugo/tools/registry", () => {
     }
   });
 
-  test("destructive admin tool requires approval", () => {
-    const disable = clientSafeTools("admin").find((t) => t.name === "disableUser");
-    expect(disable).toBeDefined();
-    expect(disable?.requiresApproval).toBe(true);
+  test("admin registry exposes only implemented read-only diagnostics for now", () => {
+    expect(ADMIN_TOOLS.every((t) => t.readOnly)).toBe(true);
+    expect(clientSafeTools("admin").filter((t) => t.requiresApproval)).toEqual([]);
   });
 });

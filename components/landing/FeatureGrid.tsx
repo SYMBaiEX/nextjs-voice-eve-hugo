@@ -190,7 +190,7 @@ export function FeatureGrid() {
               </span>
               <span
                 className={cn(
-                  "rounded-full border px-2 py-0.5 font-mono text-[10px] tracking-widest",
+                  "rounded-none border px-2 py-0.5 font-mono text-[10px] tracking-widest",
                   accent.chip,
                 )}
               >

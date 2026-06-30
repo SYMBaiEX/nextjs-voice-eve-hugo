@@ -8,9 +8,16 @@ import { getRealtimeModel, isAiConfigured } from "@/lib/ai";
 import { rateLimit } from "@/lib/rate-limit";
 import { REALTIME_TOKEN_RATE, REALTIME_TOKEN_TTL_SECONDS } from "@/lib/constants";
 import { track } from "@/lib/telemetry";
+import { clientSafeTools } from "@/agent/hugo/tools/registry";
+import type { ClientSafeToolDefinition } from "@/lib/types";
 
 const Body = z.object({
-  sessionConfig: z.record(z.string(), z.unknown()).optional(),
+  sessionConfig: z
+    .object({
+      voice: z.string().min(1).optional(),
+      turnDetection: z.object({ type: z.literal("server-vad") }).optional(),
+    })
+    .optional(),
 });
 
 interface CachedRealtimeToken {
@@ -18,6 +25,26 @@ interface CachedRealtimeToken {
   token: string;
   url: string;
 }
+
+interface RealtimeTokenEnvelope {
+  conversationId: string;
+  expiresAt: number;
+  model: string;
+  sessionConfig: {
+    voice: string;
+    turnDetection: { type: "server-vad" };
+  };
+  token: string;
+  tools: ClientSafeToolDefinition[];
+  url: string;
+  voiceSessionId: string;
+}
+
+const NO_STORE_HEADERS = {
+  "Cache-Control": "no-store",
+  "Vercel-CDN-Cache-Control": "no-store",
+  "CDN-Cache-Control": "no-store",
+} as const;
 
 const MAX_CACHED_REALTIME_TOKENS = 500;
 const realtimeTokenCache = new Map<string, CachedRealtimeToken>();
@@ -59,11 +86,19 @@ function pruneRealtimeTokenCache() {
   }
 }
 
+function realtimeResponse(
+  payload: RealtimeTokenEnvelope,
+): ReturnType<typeof NextResponse.json> {
+  return NextResponse.json(payload, {
+    headers: NO_STORE_HEADERS,
+  });
+}
+
 /**
  * POST /api/realtime/token (PRD 5.4, 5.11, 5.17)
  *
  * Authenticated, rate-limited. Mints a SHORT-LIVED AI Gateway realtime token
- * server-side and returns only `{ token, url }`. The AI_GATEWAY_API_KEY never
+ * server-side and returns a client-safe realtime envelope. The AI_GATEWAY_API_KEY never
  * leaves the server. Attaches to the caller's existing voiceSession (passed as
  * ?session=ID) and flips it to "connecting". If voice is unavailable (no key,
  * gateway error) the client falls back to text chat.
@@ -71,12 +106,18 @@ function pruneRealtimeTokenCache() {
 export async function POST(req: Request) {
   const token = await authToken();
   if (!token) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    return NextResponse.json(
+      { error: "Unauthorized" },
+      { status: 401, headers: NO_STORE_HEADERS },
+    );
   }
 
   const me = await fetchQuery(api.users.currentUser, {}, { token });
   if (!me) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    return NextResponse.json(
+      { error: "Unauthorized" },
+      { status: 401, headers: NO_STORE_HEADERS },
+    );
   }
 
   const url = new URL(req.url);
@@ -86,19 +127,34 @@ export async function POST(req: Request) {
   if (!sessionParam) {
     return NextResponse.json(
       { error: "A voice session is required before connecting." },
-      { status: 400, headers: { "Cache-Control": "no-store" } },
+      { status: 400, headers: NO_STORE_HEADERS },
+    );
+  }
+
+  const session = await fetchQuery(
+    api.voiceSessions.getOwn,
+    { voiceSessionId: sessionParam },
+    { token },
+  ).catch(() => null);
+  if (!session) {
+    return NextResponse.json(
+      { error: "Voice session not found." },
+      { status: 404, headers: NO_STORE_HEADERS },
     );
   }
 
   const parsed = Body.safeParse(await req.json().catch(() => ({})));
-  const sessionConfig = parsed.success ? parsed.data.sessionConfig : undefined;
+  const sessionConfig = {
+    voice: parsed.success
+      ? (parsed.data.sessionConfig?.voice ?? session.voice)
+      : session.voice,
+    turnDetection: { type: "server-vad" as const },
+  };
 
-  // Mint for the same admin-configured realtime model the session was created
-  // with, so the token and the client codec agree.
-  const runtime = await fetchQuery(api.settings.getRuntime, {}, { token }).catch(
-    () => null,
-  );
-  const model = getRealtimeModel(runtime?.defaultRealtimeModel);
+  // Mint for the same realtime model the voice session was created with, so
+  // the token and the client codec agree without another settings read.
+  const model = getRealtimeModel(session.model);
+  const tools = clientSafeTools("user");
   const cacheKey = tokenCacheKey({
     model,
     sessionConfig,
@@ -117,14 +173,16 @@ export async function POST(req: Request) {
       userId: me._id,
       voiceSessionId: sessionParam,
     });
-    return NextResponse.json(
-      {
-        expiresAt: Math.floor(cached.expiresAtMs / 1000),
-        token: cached.token,
-        url: cached.url,
-      },
-      { headers: { "Cache-Control": "no-store" } },
-    );
+    return realtimeResponse({
+      conversationId: session.conversationId,
+      expiresAt: Math.floor(cached.expiresAtMs / 1000),
+      model,
+      sessionConfig,
+      token: cached.token,
+      tools,
+      url: cached.url,
+      voiceSessionId: sessionParam,
+    });
   }
 
   if (!isAiConfigured()) {
@@ -141,7 +199,7 @@ export async function POST(req: Request) {
     ).catch(() => {});
     return NextResponse.json(
       { error: "Realtime voice is not configured. Falling back to text chat." },
-      { status: 503, headers: { "Cache-Control": "no-store" } },
+      { status: 503, headers: NO_STORE_HEADERS },
     );
   }
 
@@ -158,7 +216,7 @@ export async function POST(req: Request) {
       {
         status: 429,
         headers: {
-          "Cache-Control": "no-store",
+          ...NO_STORE_HEADERS,
           "Retry-After": String(Math.ceil(limit.retryAfterMs / 1000)),
         },
       },
@@ -201,15 +259,16 @@ export async function POST(req: Request) {
       voiceSessionId: sessionParam,
     });
 
-    // Only the token + url cross to the browser — never the API key.
-    return NextResponse.json(
-      {
-        expiresAt: Math.floor(expiresAtMs / 1000),
-        token: realtimeToken,
-        url: realtimeUrl,
-      },
-      { headers: { "Cache-Control": "no-store" } },
-    );
+    return realtimeResponse({
+      conversationId: session.conversationId,
+      expiresAt: Math.floor(expiresAtMs / 1000),
+      model,
+      sessionConfig,
+      token: realtimeToken,
+      tools,
+      url: realtimeUrl,
+      voiceSessionId: sessionParam,
+    });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Failed to mint token";
     await fetchMutation(
@@ -230,7 +289,7 @@ export async function POST(req: Request) {
     });
     return NextResponse.json(
       { error: "Could not start realtime voice. Falling back to text chat." },
-      { status: 502, headers: { "Cache-Control": "no-store" } },
+      { status: 502, headers: NO_STORE_HEADERS },
     );
   }
 }

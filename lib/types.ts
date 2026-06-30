@@ -62,6 +62,7 @@ export type UsageEventType =
 
 /** Response shape of POST /api/realtime/token (client-safe — never includes keys). */
 export interface RealtimeTokenResponse {
+  expiresAt: number;
   token: string;
   url: string;
   model: string;

@@ -38,6 +38,37 @@ export const USER_TOOLS: ToolMeta[] = [
     requiresApproval: false,
   },
   {
+    name: "getCurrentUsageSummary",
+    description:
+      "Get the signed-in user's current-day limits and lifetime usage summary.",
+    scope: "user",
+    readOnly: true,
+    requiresApproval: false,
+  },
+  {
+    name: "listUserMemories",
+    description: "List durable facts and preferences saved for the signed-in user.",
+    scope: "user",
+    readOnly: true,
+    requiresApproval: false,
+  },
+  {
+    name: "getConversationTranscript",
+    description:
+      "Read recent turns from the current or specified conversation the user can access.",
+    scope: "user",
+    readOnly: true,
+    requiresApproval: false,
+  },
+  {
+    name: "updateUserPreferences",
+    description:
+      "Update explicit profile preferences such as theme, voice, concise voice, or reduced motion.",
+    scope: "user",
+    readOnly: false,
+    requiresApproval: false,
+  },
+  {
     name: "saveUserPreference",
     description:
       "Save a durable user preference or fact to memory, keyed by a short stable key.",
@@ -78,11 +109,11 @@ export const ADMIN_TOOLS: ToolMeta[] = [
     requiresApproval: false,
   },
   {
-    name: "disableUser",
-    description: "Disable a user account (admin only, destructive).",
+    name: "getVoiceSessionDiagnostics",
+    description: "Voice session, usage, and event diagnostics (admin only).",
     scope: "admin",
-    readOnly: false,
-    requiresApproval: true,
+    readOnly: true,
+    requiresApproval: false,
   },
 ];
 
