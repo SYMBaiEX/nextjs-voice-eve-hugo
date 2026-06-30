@@ -12,6 +12,7 @@ import type * as admin from "../admin.js";
 import type * as agentEvents from "../agentEvents.js";
 import type * as auth from "../auth.js";
 import type * as conversations from "../conversations.js";
+import type * as crons from "../crons.js";
 import type * as http from "../http.js";
 import type * as memories from "../memories.js";
 import type * as messages from "../messages.js";
@@ -35,6 +36,7 @@ declare const fullApi: ApiFromModules<{
   agentEvents: typeof agentEvents;
   auth: typeof auth;
   conversations: typeof conversations;
+  crons: typeof crons;
   http: typeof http;
   memories: typeof memories;
   messages: typeof messages;

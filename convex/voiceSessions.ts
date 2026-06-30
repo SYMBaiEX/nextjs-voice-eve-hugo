@@ -1,5 +1,5 @@
 import { v } from "convex/values";
-import { mutation, query } from "./_generated/server";
+import { internalMutation, mutation, query } from "./_generated/server";
 import {
   requireUser,
   requireAdmin,
@@ -12,6 +12,14 @@ import { estimateCost } from "./model/usage";
  * realtime token is minted and updated as the session connects, runs, ends, or
  * fails. Metadata (turns, interruptions, latency) powers the admin console.
  */
+
+/** Voice sessions sitting un-ended this long are treated as orphaned (a crashed
+ *  tab or a dropped end-beacon). Generous vs. the realtime token TTL (60s) and
+ *  the 30-minute daily voice cap, so a legitimately-live session is never cut. */
+const STALE_VOICE_SESSION_MS = 60 * 60 * 1000; // 1 hour
+/** Cap per cron run so the sweep stays well within a mutation's read/write
+ *  limits; any backlog drains over subsequent runs. */
+const STALE_SWEEP_BATCH = 100;
 
 const statusValidator = v.union(
   v.literal("created"),
@@ -192,6 +200,50 @@ export const recordTurn = mutation({
       status: "active",
     });
     return { ok: true };
+  },
+});
+
+/**
+ * Cron-driven cleanup (PRD 5.7): finalize voice sessions that were never ended.
+ * Closes the orphan gap the client teardown can't cover — browser crashes,
+ * killed tabs, dropped end-beacons — which otherwise leave sessions stuck
+ * "created" / "connecting" / "active" forever. Internal-only: scheduled from
+ * `convex/crons.ts`, never callable from a client.
+ *
+ * Swept sessions are stamped "ended" with `errorCode: "swept_stale"` so they're
+ * identifiable in the admin console. They are intentionally NOT metered: their
+ * wall-clock duration is untrustworthy (a tab left open idle could be hours),
+ * and the normal end path (sendBeacon / keepalive fetch) already meters real
+ * exits from the server-measured duration. Idempotent and batched.
+ */
+export const endStale = internalMutation({
+  args: {},
+  handler: async (ctx) => {
+    const now = Date.now();
+    const cutoff = now - STALE_VOICE_SESSION_MS;
+    const openStatuses = ["created", "connecting", "active"] as const;
+    let ended = 0;
+    for (const status of openStatuses) {
+      // by_status_started is [status, startedAt], so this scans only un-ended
+      // sessions of one status, oldest first — no full-table scan.
+      const stale = await ctx.db
+        .query("voiceSessions")
+        .withIndex("by_status_started", (q) =>
+          q.eq("status", status).lt("startedAt", cutoff),
+        )
+        .take(STALE_SWEEP_BATCH);
+      for (const session of stale) {
+        await ctx.db.patch(session._id, {
+          status: "ended",
+          endedAt: now,
+          durationMs: session.durationMs ?? now - session.startedAt,
+          errorCode: "swept_stale",
+          errorMessage: "Auto-closed: no end signal received.",
+        });
+        ended += 1;
+      }
+    }
+    return { ended };
   },
 });
 
