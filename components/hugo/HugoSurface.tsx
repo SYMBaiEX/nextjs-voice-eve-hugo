@@ -10,7 +10,7 @@ import {
 import { useMutation, useQuery } from "convex/react";
 import { useChat } from "@ai-sdk/react";
 import { DefaultChatTransport, type UIMessage } from "ai";
-import { Mic, PhoneOff, SendHorizontal, Square, X } from "lucide-react";
+import { Mic, PhoneOff, RotateCcw, SendHorizontal, Square, X } from "lucide-react";
 import { toast } from "sonner";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
@@ -235,13 +235,16 @@ function HugoSurfaceInner({
       }),
     [],
   );
-  const { messages, sendMessage, status, stop, setMessages } = useChat({
-    transport,
-    messages: initialMessages,
-    onError: (err: Error) => {
-      toast.error(err.message || "Hugo couldn’t respond. Please try again.");
-    },
-  });
+  const { messages, sendMessage, status, stop, setMessages, regenerate } =
+    useChat({
+      transport,
+      messages: initialMessages,
+      // Throttle UI updates so smoothed token deltas render calmly, not jankily.
+      experimental_throttle: 50,
+      onError: (err: Error) => {
+        toast.error(err.message || "Hugo couldn’t respond. Please try again.");
+      },
+    });
   const isStreaming = status === "submitted" || status === "streaming";
 
   // Report the (possibly server-created) conversation id up.
@@ -457,6 +460,19 @@ function HugoSurfaceInner({
     (rt.orbState === "speaking" || rt.orbState === "thinking");
   const isEmpty = transcript.length === 0 && !voiceActive;
 
+  // Offer a regenerate when idle and Hugo's text reply was the last turn.
+  const lastRole = (messages[messages.length - 1] as { role?: string } | undefined)
+    ?.role;
+  const canRegenerate =
+    !isStreaming && !voiceActive && lastRole === "assistant";
+  const handleRegenerate = useCallback(() => {
+    if (keyless) {
+      nudgeForKey();
+      return;
+    }
+    void regenerate();
+  }, [keyless, nudgeForKey, regenerate]);
+
   return (
     <div className={cn("relative flex h-full flex-col", className)}>
       {/* Hero orb — centered in the top half while voice is live OR on a fresh
@@ -635,16 +651,33 @@ function HugoSurfaceInner({
             )}
           </form>
 
-          {isStreaming && (
-            <div className="mt-1.5 flex items-center gap-2 px-2" aria-live="polite">
-              <Spinner />
-              <span className="text-xs font-mono text-text-muted">
-                {status === "submitted"
-                  ? "Hugo is thinking…"
-                  : "Hugo is responding…"}
-              </span>
-            </div>
-          )}
+          <div
+            className="mt-1.5 flex h-6 items-center gap-2 px-2"
+            aria-live="polite"
+          >
+            {isStreaming ? (
+              <>
+                <Spinner />
+                <span className="text-xs font-mono text-text-muted">
+                  {status === "submitted"
+                    ? "Hugo is thinking…"
+                    : "Hugo is responding…"}
+                </span>
+              </>
+            ) : (
+              canRegenerate && (
+                <button
+                  type="button"
+                  onClick={handleRegenerate}
+                  className="inline-flex items-center gap-1.5 rounded-md text-xs text-text-muted transition-colors outline-none hover:text-text-primary focus-visible:text-text-primary"
+                  aria-label="Regenerate Hugo's last response"
+                >
+                  <RotateCcw aria-hidden className="size-3.5" />
+                  Regenerate
+                </button>
+              )
+            )}
+          </div>
         </div>
       </div>
     </div>

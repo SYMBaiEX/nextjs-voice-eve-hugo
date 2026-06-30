@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import {
   streamText,
+  smoothStream,
   convertToModelMessages,
   stepCountIs,
   type ModelMessage,
@@ -18,6 +19,7 @@ import {
   resolveUserModel,
 } from "@/lib/ai";
 import { getUserGateway } from "@/lib/user-gateway";
+import { getRuntimeConfig } from "@/lib/runtime-config";
 import { resolveTextModel } from "@/lib/model-catalog";
 import { hugoTelemetry, track } from "@/lib/telemetry";
 import { isTextLimitReached } from "@/lib/usage";
@@ -88,10 +90,8 @@ export async function POST(req: Request) {
     );
   }
 
-  // Runtime config from admin Settings (model + maintenance mode).
-  const runtime = await fetchQuery(api.settings.getRuntime, {}, { token }).catch(
-    () => null,
-  );
+  // Runtime config from admin Settings (model + maintenance mode), cached.
+  const runtime = await getRuntimeConfig(token);
   if (runtime?.maintenanceMode && me.role !== "admin") {
     return NextResponse.json(
       { error: "Hugo is in maintenance mode. Please try again shortly." },
@@ -206,6 +206,8 @@ export async function POST(req: Request) {
       messages: modelMessages,
       tools: buildHugoTools({ token, conversationId, role: me.role }),
       stopWhen: stepCountIs(5),
+      // Even out token bursts into word-by-word deltas for a calmer stream.
+      experimental_transform: smoothStream({ chunking: "word" }),
       maxOutputTokens: callSettings.maxOutputTokens,
       maxRetries: callSettings.maxRetries,
       timeout: callSettings.timeoutMs,

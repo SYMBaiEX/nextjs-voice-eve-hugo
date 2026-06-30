@@ -7,6 +7,7 @@ import {
 } from "@/lib/constants";
 import { resolveUserModel } from "@/lib/ai";
 import { getUserGateway } from "@/lib/user-gateway";
+import { getRuntimeConfig } from "@/lib/runtime-config";
 import {
   getModelCatalog,
   resolveRealtimeModel,
@@ -33,7 +34,7 @@ export async function GET() {
 
   const [me, runtime] = await Promise.all([
     fetchQuery(api.users.currentUser, {}, { token }).catch(() => null),
-    fetchQuery(api.settings.getRuntime, {}, { token }).catch(() => null),
+    getRuntimeConfig(token),
   ]);
 
   // No profile yet: curated lists + platform defaults (no gateway call).

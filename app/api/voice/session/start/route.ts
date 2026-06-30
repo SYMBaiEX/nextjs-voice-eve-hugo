@@ -9,6 +9,7 @@ import {
   resolveUserModel,
 } from "@/lib/ai";
 import { getUserGateway } from "@/lib/user-gateway";
+import { getRuntimeConfig } from "@/lib/runtime-config";
 import { resolveRealtimeModel } from "@/lib/model-catalog";
 import { clientSafeTools } from "@/agent/hugo/tools/registry";
 import { isVoiceLimitReached } from "@/lib/usage";
@@ -108,10 +109,8 @@ export async function POST(req: Request) {
     );
   }
 
-  // Runtime config from admin Settings (model, voice, maintenance mode).
-  const runtime = await fetchQuery(api.settings.getRuntime, {}, { token }).catch(
-    () => null,
-  );
+  // Runtime config from admin Settings (model, voice, maintenance mode), cached.
+  const runtime = await getRuntimeConfig(token);
   if (runtime?.maintenanceMode && me?.role !== "admin") {
     return NextResponse.json(
       { error: "Hugo is in maintenance mode. Please try again shortly." },

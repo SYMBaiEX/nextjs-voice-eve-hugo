@@ -50,6 +50,9 @@ export function ModelMenu() {
     realtime: AVAILABLE_REALTIME_MODELS[0].id,
   });
 
+  // Refetch when the user's BYOK key changes (hasGatewayKey) so the catalog +
+  // defaults immediately reflect their own gateway, not a stale/curated list.
+  const hasGatewayKey = me?.hasGatewayKey;
   useEffect(() => {
     if (!canRunProtectedQueries) return;
     let cancelled = false;
@@ -71,7 +74,7 @@ export function ModelMenu() {
     return () => {
       cancelled = true;
     };
-  }, [canRunProtectedQueries]);
+  }, [canRunProtectedQueries, hasGatewayKey]);
 
   useEffect(() => {
     if (!open) return;
