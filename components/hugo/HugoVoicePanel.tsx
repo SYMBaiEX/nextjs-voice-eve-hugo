@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useMutation } from "convex/react";
 import { Mic } from "lucide-react";
 import { toast } from "sonner";
@@ -67,12 +67,56 @@ function isFinalized(message: RealtimeTurnLike): boolean {
   return textParts.every((p) => p.state !== "streaming");
 }
 
+/** Finalize a voice session server-side (stamps duration + meters usage).
+ *  Uses `sendBeacon` on page-unload — where a normal fetch is cancelled — and a
+ *  keepalive fetch otherwise, so the session is always closed even on tab close,
+ *  navigation, or a Voice→Text tab switch. The end mutation is idempotent. */
+function endVoiceSessionRequest(
+  active: { voiceSessionId: string; conversationId: string },
+  opts?: { beacon?: boolean },
+): void {
+  const body = JSON.stringify({
+    voiceSessionId: active.voiceSessionId,
+    conversationId: active.conversationId,
+    status: "ended",
+  });
+  if (opts?.beacon && typeof navigator !== "undefined" && navigator.sendBeacon) {
+    navigator.sendBeacon(
+      "/api/voice/session/end",
+      new Blob([body], { type: "application/json" }),
+    );
+    return;
+  }
+  void fetch("/api/voice/session/end", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    keepalive: true,
+    body,
+  }).catch(() => {});
+}
+
+/** A previously-persisted turn (earlier voice or text) shown above the live
+ *  session so a conversation can be picked back up in voice. */
+export interface PriorTurn {
+  id: string;
+  role: "user" | "assistant";
+  content: string;
+  createdAt?: number;
+  /** The realtime SDK message id this turn was persisted from (voice turns).
+   *  Used to dedupe against the live transcript so finalized turns don't double. */
+  sourceId?: string;
+}
+
 export function HugoVoicePanel({
   conversationId,
+  priorTurns,
+  onConversationId,
   onFallbackToText,
   className,
 }: {
   conversationId?: string;
+  priorTurns?: readonly PriorTurn[];
+  onConversationId?: (conversationId: string) => void;
   onFallbackToText?: () => void;
   className?: string;
 }) {
@@ -90,6 +134,13 @@ export function HugoVoicePanel({
   useEffect(() => {
     messagesRef.current = rt.messages;
   }, [rt.messages]);
+
+  // Keep the latest session reachable from teardown paths (unmount, page
+  // unload) whose effects run with stale closures.
+  const sessionRef = useRef(session);
+  useEffect(() => {
+    sessionRef.current = session;
+  }, [session]);
 
   // Surface realtime errors and fall back to text.
   const reportedError = useRef<string | null>(null);
@@ -158,6 +209,9 @@ export function HugoVoicePanel({
         model: data.model,
         voice: data.voice,
       });
+      // Lift the conversation id so the parent keeps voice + text in ONE
+      // conversation (otherwise switching to text would fork a new thread).
+      onConversationId?.(data.conversationId);
     } catch (err) {
       const message =
         err instanceof Error && err.message ? err.message : "Couldn't start a voice session.";
@@ -167,7 +221,7 @@ export function HugoVoicePanel({
     } finally {
       setIsStarting(false);
     }
-  }, [conversationId, isStarting, session, onFallbackToText]);
+  }, [conversationId, isStarting, session, onFallbackToText, onConversationId]);
 
   // Connect + open the mic once the session is established.
   const connect = useCallback(async () => {
@@ -215,9 +269,29 @@ export function HugoVoicePanel({
     }
   }, [rt, session, flushTurns]);
 
-  // Clean up the realtime connection on unmount.
+  // Reliable teardown for the IMPLICIT exits the explicit end button doesn't
+  // cover — closing the tab, navigating away, or switching to the Text tab
+  // (which unmounts this panel). Without this, the voiceSession is left "active"
+  // and its minutes are never metered. The server end is idempotent, so this is
+  // safe alongside an explicit endSession().
   useEffect(() => {
+    const endOnUnload = () => {
+      const active = sessionRef.current;
+      if (!active) return;
+      flushTurns(active);
+      endVoiceSessionRequest(active, { beacon: true });
+    };
+    window.addEventListener("pagehide", endOnUnload);
     return () => {
+      window.removeEventListener("pagehide", endOnUnload);
+      // React unmount (Voice→Text tab switch, route change): the page is still
+      // alive, so flush the last turns and end via keepalive fetch, then drop
+      // the realtime connection.
+      const active = sessionRef.current;
+      if (active) {
+        flushTurns(active);
+        endVoiceSessionRequest(active);
+      }
       rt.disconnect();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -225,7 +299,27 @@ export function HugoVoicePanel({
 
   const idle = !session && !isStarting;
   const orbState = isStarting ? "connecting" : rt.orbState;
-  const transcriptMessages = rt.messages as readonly TranscriptMessage[];
+
+  // Show earlier conversation turns (prior voice + text) above the live session
+  // so a conversation can be picked back up in voice with full context. Drop any
+  // prior turn already present live — deduped by the realtime message id we
+  // persisted as `sourceId` — so finalized turns never appear twice.
+  const liveMessages = rt.messages as readonly TranscriptMessage[];
+  const transcriptMessages = useMemo<readonly TranscriptMessage[]>(() => {
+    if (!priorTurns || priorTurns.length === 0) return liveMessages;
+    const liveIds = new Set(
+      liveMessages.map((m) => m.id).filter((id): id is string => !!id),
+    );
+    const prior: TranscriptMessage[] = priorTurns
+      .filter((p) => !p.sourceId || !liveIds.has(p.sourceId))
+      .map((p) => ({
+        id: p.id,
+        role: p.role,
+        content: p.content,
+        createdAt: p.createdAt,
+      }));
+    return [...prior, ...liveMessages];
+  }, [priorTurns, liveMessages]);
 
   return (
     <div className={cn("flex flex-col items-center gap-6", className)}>

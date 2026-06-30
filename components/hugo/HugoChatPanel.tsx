@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useChat } from "@ai-sdk/react";
 import { DefaultChatTransport, type UIMessage } from "ai";
 import { SendHorizontal, Square } from "lucide-react";
@@ -23,10 +23,12 @@ import { cn } from "@/lib/utils";
 export function HugoChatPanel({
   conversationId,
   initialMessages,
+  onConversationId,
   className,
 }: {
   conversationId?: string;
   initialMessages?: UIMessage[];
+  onConversationId?: (conversationId: string) => void;
   className?: string;
 }) {
   const [input, setInput] = useState("");
@@ -47,6 +49,12 @@ export function HugoChatPanel({
     setPrevProp(conversationId);
     setActiveConversationId(conversationId);
   }
+
+  // Lift the active id (esp. the server-created one) so the parent keeps voice
+  // and text in ONE conversation across mode switches.
+  useEffect(() => {
+    if (activeConversationId) onConversationId?.(activeConversationId);
+  }, [activeConversationId, onConversationId]);
 
   const transport = useMemo(
     () =>
