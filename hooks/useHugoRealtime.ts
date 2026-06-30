@@ -240,8 +240,20 @@ export function useHugoRealtime(
     }
   }, [isCapturing, startAudioCapture, stopMic, setupMicAnalyser]);
 
-  // Clean up any open mic stream + analyser on unmount.
-  useEffect(() => () => stopMic(), [stopMic]);
+  // Clean up any open mic stream + analyser on unmount ONLY.
+  //
+  // `stopMic` is recreated every render because AI SDK's `useRealtime` re-binds
+  // `stopAudioCapture` (`rt.stopAudioCapture.bind(rt)`) on each render. Listing
+  // it as a dependency here made this "unmount" cleanup fire on EVERY render —
+  // so the mic was torn down one render after `toggleMic()` opened it (the
+  // audio-reactive rAF loop re-renders ~18×/s), no audio frames were ever sent,
+  // and Hugo sat silent. Route through a ref so the teardown runs once, on real
+  // unmount, while still calling the latest `stopMic`.
+  const stopMicRef = useRef(stopMic);
+  useEffect(() => {
+    stopMicRef.current = stopMic;
+  }, [stopMic]);
+  useEffect(() => () => stopMicRef.current(), []);
 
   // --- Audio-reactive rAF loop ------------------------------------------
   // Runs only while connected. Computes a per-frame target level, smooths it
