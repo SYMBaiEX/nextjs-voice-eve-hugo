@@ -742,6 +742,10 @@ export function HugoOrb({
           <path id="hugo-wave-full" d={WAVE_FULL} />
         </defs>
 
+        <g
+          className="hugo-presence-distort"
+          style={{ transformOrigin: "200px 200px" }}
+        >
         {/* 2. Outer segmented ring. */}
         <g className="hugo-ring-outer" style={{ transformOrigin: "200px 200px" }}>
           <circle
@@ -927,6 +931,7 @@ export function HugoOrb({
               </g>
             </g>
           </g>
+        </g>
         </g>
       </svg>
     </div>

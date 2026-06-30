@@ -208,7 +208,7 @@ export function Hero({
   return (
     <section
       ref={rootRef}
-      className="relative flex flex-col items-center gap-8 text-center sm:gap-9"
+      className="relative flex flex-col items-center gap-6 text-center sm:gap-7"
     >
       {/* Orb — a single stable instance; state + destination derive from auth
           values so it never remounts (see note above). */}
@@ -216,7 +216,8 @@ export function Hero({
       <div data-hero-orb data-hero-reveal style={hidden}>
         <OrbSlot
           state="idle"
-          size="clamp(300px, 24vw, 440px)"
+          presence="hero"
+          size="clamp(300px, 29vw, 520px)"
           onClick={() => router.push(orbHref)}
         />
       </div>
@@ -230,12 +231,12 @@ export function Hero({
       </div>
 
       {/* Headline + copy */}
-      <div className="flex max-w-2xl flex-col items-center gap-5">
+      <div className="flex max-w-2xl flex-col items-center gap-4">
         <HeadlineWords />
         <div
           data-hero-copy
           data-hero-reveal
-          className="flex flex-col items-center gap-5"
+          className="flex flex-col items-center gap-4"
           style={hidden}
         >
           <p className="text-balance text-lg text-text-secondary sm:text-xl">

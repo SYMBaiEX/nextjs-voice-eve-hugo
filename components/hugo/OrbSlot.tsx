@@ -18,12 +18,14 @@ export function OrbSlot({
   size = 280,
   state = "idle",
   audioLevel,
+  presence = "default",
   onClick,
   className,
 }: {
   size?: number | string;
   state?: HugoOrbState;
   audioLevel?: number;
+  presence?: "default" | "hero";
   onClick?: () => void;
   className?: string;
 }) {
@@ -48,6 +50,7 @@ export function OrbSlot({
       el,
       state,
       audioLevel: audioLevel ?? 0,
+      presence,
       interactive,
       getOnClick: () => onClickRef.current,
     });

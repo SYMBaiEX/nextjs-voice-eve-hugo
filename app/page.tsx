@@ -65,7 +65,7 @@ export default async function LandingPage() {
 
       <main className="flex flex-1 flex-col">
         {/* Hero — above the fold, viewport-first */}
-        <section className="relative flex min-h-[88vh] items-center justify-center px-6 pb-20 pt-28">
+        <section className="relative flex min-h-[86vh] items-center justify-center px-6 pb-16 pt-20 sm:pt-24">
           <div className="w-full max-w-5xl">
             <Hero
               initialAuthed={initialAuthed}

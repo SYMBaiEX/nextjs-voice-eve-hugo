@@ -32,7 +32,7 @@ import { useReducedMotion } from "@/components/motion/useReducedMotion";
  * stays crisp even when the landing page asks for a larger hero presence.
  */
 
-const BASE_SIZE = 440;
+const BASE_SIZE = 520;
 
 const LazyHugoOrbStage = dynamic(
   () =>
@@ -45,6 +45,7 @@ interface SlotRegistration {
   el: HTMLElement;
   state: HugoOrbState;
   audioLevel: number;
+  presence: "default" | "hero";
   interactive: boolean;
   /** Read lazily at click time so the latest handler is always used. */
   getOnClick: () => (() => void) | undefined;
@@ -146,6 +147,7 @@ function OrbHost({ store }: { store: OrbStageStore }) {
   const reduced = useReducedMotion();
 
   const containerRef = useRef<HTMLDivElement>(null);
+  const presenceRef = useRef<HTMLDivElement>(null);
   const stRef = useRef({
     placed: false,
     transform: { tx: 0, ty: 0, s: 1 } as Transform,
@@ -257,6 +259,116 @@ function OrbHost({ store }: { store: OrbStageStore }) {
     };
   }, [active?.id, reduced, store]);
 
+  useEffect(() => {
+    const presence = presenceRef.current;
+    if (!presence) return;
+
+    const activeSlot = store.getActive();
+    const activeId = activeSlot?.id;
+    const isHero = activeSlot?.presence === "hero";
+
+    const resetPresence = () => {
+      presence.style.transform = "";
+      presence.style.willChange = "";
+      const distort = presence.querySelector<SVGGElement>(".hugo-presence-distort");
+      if (distort) distort.style.transform = "";
+    };
+
+    if (!activeId || !isHero || reduced) {
+      resetPresence();
+      return;
+    }
+
+    const hoverQuery = window.matchMedia("(hover: hover) and (pointer: fine)");
+    const pointer = {
+      x: 0,
+      y: 0,
+      active: false,
+    };
+    const cur = {
+      x: 0,
+      y: 0,
+      rx: 0,
+      ry: 0,
+      scale: 1,
+      dx: 0,
+      dy: 0,
+      warp: 0,
+    };
+    let raf = 0;
+    let distortEl: SVGGElement | null = null;
+
+    presence.style.transformStyle = "preserve-3d";
+    presence.style.transformOrigin = "50% 50%";
+    presence.style.willChange = "transform";
+
+    const clamp = (n: number, min: number, max: number) => Math.min(max, Math.max(min, n));
+    const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
+
+    const onPointerMove = (event: PointerEvent) => {
+      if (!hoverQuery.matches) return;
+      pointer.x = event.clientX;
+      pointer.y = event.clientY;
+      pointer.active = true;
+    };
+    const onPointerLeave = () => {
+      pointer.active = false;
+    };
+
+    const frame = () => {
+      raf = requestAnimationFrame(frame);
+      if (document.hidden) return;
+
+      const slot = store.getActive();
+      if (!slot || slot.id !== activeId || slot.presence !== "hero") return;
+
+      const rect = slot.el.getBoundingClientRect();
+      const cx = rect.left + rect.width / 2;
+      const cy = rect.top + rect.height / 2;
+      const radius = Math.max(rect.width * 0.92, 420);
+      const dx = pointer.active && hoverQuery.matches ? pointer.x - cx : 0;
+      const dy = pointer.active && hoverQuery.matches ? pointer.y - cy : 0;
+      const dist = Math.hypot(dx, dy);
+      const influence = pointer.active ? Math.pow(clamp(1 - dist / radius, 0, 1), 1.7) : 0;
+      const nx = radius > 0 ? clamp(dx / radius, -1, 1) : 0;
+      const ny = radius > 0 ? clamp(dy / radius, -1, 1) : 0;
+      const scroll = clamp(window.scrollY / 720, 0, 1);
+
+      cur.x = lerp(cur.x, nx * 24 * influence, 0.12);
+      cur.y = lerp(cur.y, ny * 18 * influence - scroll * 26, 0.12);
+      cur.rx = lerp(cur.rx, -ny * 9 * influence + scroll * 6, 0.1);
+      cur.ry = lerp(cur.ry, nx * 11 * influence, 0.1);
+      cur.scale = lerp(cur.scale, 1 + influence * 0.035 + scroll * 0.018, 0.1);
+      cur.dx = lerp(cur.dx, nx * 8 * influence, 0.14);
+      cur.dy = lerp(cur.dy, ny * 6 * influence, 0.14);
+      cur.warp = lerp(cur.warp, influence, 0.14);
+
+      presence.style.transform =
+        `perspective(900px) translate3d(${cur.x.toFixed(2)}px, ${cur.y.toFixed(2)}px, 0) ` +
+        `rotateX(${cur.rx.toFixed(2)}deg) rotateY(${cur.ry.toFixed(2)}deg) ` +
+        `scale(${cur.scale.toFixed(4)})`;
+
+      distortEl ??= presence.querySelector<SVGGElement>(".hugo-presence-distort");
+      if (distortEl) {
+        distortEl.style.transform =
+          `translate(${cur.dx.toFixed(2)}px, ${cur.dy.toFixed(2)}px) ` +
+          `skewX(${(cur.dx * 0.32).toFixed(2)}deg) skewY(${(cur.dy * 0.26).toFixed(2)}deg) ` +
+          `scale(${(1 + cur.warp * 0.018).toFixed(4)})`;
+      }
+    };
+
+    window.addEventListener("pointermove", onPointerMove, { passive: true });
+    window.addEventListener("pointerleave", onPointerLeave);
+    raf = requestAnimationFrame(frame);
+
+    return () => {
+      window.removeEventListener("pointermove", onPointerMove);
+      window.removeEventListener("pointerleave", onPointerLeave);
+      cancelAnimationFrame(raf);
+      resetPresence();
+    };
+  }, [active?.id, reduced, store]);
+
   const handleClick = active?.interactive
     ? () => active.getOnClick()?.()
     : undefined;
@@ -278,15 +390,25 @@ function OrbHost({ store }: { store: OrbStageStore }) {
         willChange: "transform, opacity",
       }}
     >
-      {(active || store.hasEverActive()) && (
-        <LazyHugoOrbStage
-          state={active?.state ?? "idle"}
-          size={BASE_SIZE}
-          audioLevel={active?.audioLevel}
-          active={!!active}
-          onClick={handleClick}
-        />
-      )}
+      <div
+        ref={presenceRef}
+        data-hugo-presence-host
+        style={{
+          width: "100%",
+          height: "100%",
+          transformOrigin: "50% 50%",
+        }}
+      >
+        {(active || store.hasEverActive()) && (
+          <LazyHugoOrbStage
+            state={active?.state ?? "idle"}
+            size={BASE_SIZE}
+            audioLevel={active?.audioLevel}
+            active={!!active}
+            onClick={handleClick}
+          />
+        )}
+      </div>
     </div>
   );
 }
