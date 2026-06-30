@@ -429,14 +429,14 @@ function HugoSurfaceInner({
         <div
           className={cn(
             "absolute inset-x-0 z-10 flex justify-center",
-            voiceActive ? "pointer-events-none top-4" : "top-[4%]",
+            voiceActive ? "pointer-events-none top-4" : "top-[13%]",
           )}
           title={isEmpty ? "Talk to Hugo" : undefined}
         >
           <OrbSlot
             presence="hero"
             state={orbState}
-            size={voiceActive ? 260 : 340}
+            size={voiceActive ? 260 : 380}
             audioLevel={rt.audioLevel}
             onClick={isEmpty ? () => void startVoice() : undefined}
           />
@@ -446,9 +446,10 @@ function HugoSurfaceInner({
       {/* Transcript / greeting */}
       <div className="relative min-h-0 flex-1">
         {isEmpty ? (
-          <div className="flex h-full flex-col items-center px-4 pb-2 text-center">
-            {/* Orb floats in the top half (rendered absolutely); push the
-                greeting + chips down toward the composer. */}
+          <div className="flex h-full flex-col items-center px-4 pb-3 text-center">
+            {/* Orb floats in the upper half (rendered absolutely); push the
+                greeting down toward the composer. Suggestions live in the
+                composer toolbar, beside the model selector. */}
             <div className="flex-1" aria-hidden />
             <div className="animate-rise">
               <h1 className="text-3xl font-semibold tracking-tight text-text-primary">
@@ -458,13 +459,6 @@ function HugoSurfaceInner({
                 Ask a question, talk it through, or pick one to start.
               </p>
             </div>
-            <SuggestionChips
-              className="mt-6"
-              onPick={(t) => {
-                setInput(t);
-                textareaRef.current?.focus();
-              }}
-            />
           </div>
         ) : (
           <div
@@ -534,9 +528,19 @@ function HugoSurfaceInner({
             </div>
           )}
 
-          {/* Model selector — a card tab attached to the top-left of the input */}
-          <div className="ml-3 flex">
+          {/* Model selector (card tab attached to the input's top-left) + the
+              starter suggestions to its right on a fresh conversation. */}
+          <div className="flex items-end gap-1.5 pl-3 pr-1">
             <ModelMenu />
+            {isEmpty && (
+              <SuggestionChips
+                className="min-w-0 flex-1 pb-0.5"
+                onPick={(t) => {
+                  setInput(t);
+                  textareaRef.current?.focus();
+                }}
+              />
+            )}
           </div>
 
           <form
