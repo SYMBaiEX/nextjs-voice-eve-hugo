@@ -170,7 +170,9 @@ export function useHugoRealtime(
     try {
       await rawConnect();
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to connect");
+      const message = e instanceof Error ? e.message : "Failed to connect";
+      setError(message);
+      throw e;
     }
   }, [rawConnect]);
 

@@ -3,7 +3,7 @@ import { gateway } from "@ai-sdk/gateway";
 import { z } from "zod";
 import { fetchQuery, fetchMutation, authToken } from "@/lib/convex-server";
 import { api } from "@/convex/_generated/api";
-import type { Id } from "@/convex/_generated/dataModel";
+import type { Doc, Id } from "@/convex/_generated/dataModel";
 import { getRealtimeModel, isAiConfigured } from "@/lib/ai";
 import { rateLimit } from "@/lib/rate-limit";
 import { REALTIME_TOKEN_RATE, REALTIME_TOKEN_TTL_SECONDS } from "@/lib/constants";
@@ -86,6 +86,13 @@ function pruneRealtimeTokenCache() {
   }
 }
 
+function voiceSessionLookupStatus(message: string): number {
+  const normalized = message.toLowerCase();
+  if (normalized.includes("unauthorized")) return 401;
+  if (normalized.includes("forbidden")) return 403;
+  return 500;
+}
+
 function realtimeResponse(
   payload: RealtimeTokenEnvelope,
 ): ReturnType<typeof NextResponse.json> {
@@ -131,12 +138,32 @@ export async function POST(req: Request) {
     );
   }
 
-  const session = await fetchQuery(
-    api.voiceSessions.getOwn,
-    { voiceSessionId: sessionParam },
-    { token },
-  ).catch(() => null);
+  let session: Doc<"voiceSessions"> | null;
+  try {
+    session = await fetchQuery(
+      api.voiceSessions.getOwn,
+      { voiceSessionId: sessionParam },
+      { token },
+    );
+  } catch (err) {
+    const message =
+      err instanceof Error ? err.message : "Failed to validate voice session.";
+    track("realtime_voice_session_lookup_failed", {
+      error: message,
+      userId: me._id,
+      voiceSessionId: sessionParam,
+    });
+    return NextResponse.json(
+      { error: "Could not validate voice session." },
+      { status: voiceSessionLookupStatus(message), headers: NO_STORE_HEADERS },
+    );
+  }
+
   if (!session) {
+    track("realtime_voice_session_not_found", {
+      userId: me._id,
+      voiceSessionId: sessionParam,
+    });
     return NextResponse.json(
       { error: "Voice session not found." },
       { status: 404, headers: NO_STORE_HEADERS },

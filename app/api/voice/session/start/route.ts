@@ -127,7 +127,13 @@ export async function POST(req: Request) {
     { token },
   ).catch(() => {});
 
-  track("voice_session_started", { model, userId: me._id, voice });
+  track("voice_session_started", {
+    conversationId,
+    model,
+    userId: me._id,
+    voice,
+    voiceSessionId,
+  });
 
   return NextResponse.json(
     {
