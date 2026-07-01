@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef } from "react";
+import { MarkdownContent } from "@/components/hugo/MarkdownContent";
 import { cn } from "@/lib/utils";
 
 /**
@@ -171,13 +172,15 @@ export function HugoTranscript({
               </div>
               <div
                 className={cn(
-                  "rounded-lg border px-3.5 py-2.5 text-sm leading-relaxed whitespace-pre-wrap break-words",
+                  "rounded-lg border px-3.5 py-2.5 text-sm leading-relaxed break-words",
                   isUser
                     ? "border-border bg-surface-elevated/60 text-text-secondary"
                     : "border-hugo-cyan/15 bg-hugo-cyan/[0.04] text-text-primary",
                 )}
               >
-                {turn.text || (
+                {turn.text ? (
+                  <MarkdownContent text={turn.text} />
+                ) : (
                   <span className="text-text-muted italic">…</span>
                 )}
               </div>
