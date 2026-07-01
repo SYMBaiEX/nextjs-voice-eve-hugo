@@ -15,10 +15,7 @@ import { clientSafeTools } from "@/hugo-agent/tools/registry";
 import { isVoiceLimitReached } from "@/lib/usage";
 import { track } from "@/lib/telemetry";
 import { rateLimit } from "@/lib/rate-limit";
-import {
-  REALTIME_TOKEN_RATE,
-  REALTIME_TURN_SILENCE_DURATION_MS,
-} from "@/lib/constants";
+import { REALTIME_TOKEN_RATE } from "@/lib/constants";
 import { routeErrorMessage, statusFromConvexError } from "@/lib/route-errors";
 
 const NO_STORE_HEADERS = {
@@ -200,10 +197,7 @@ export async function POST(req: Request) {
         inputAudioTranscription: {},
         instructions,
         voice,
-        turnDetection: {
-          type: "server-vad",
-          silenceDurationMs: REALTIME_TURN_SILENCE_DURATION_MS,
-        },
+        turnDetection: { type: "server-vad" },
       },
       tools: clientSafeTools(me.role),
     },

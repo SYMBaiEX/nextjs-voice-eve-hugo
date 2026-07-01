@@ -5,7 +5,6 @@ import { experimental_useRealtime as useRealtime } from "@ai-sdk/react";
 import { gateway } from "@ai-sdk/gateway";
 import { utils } from "animejs";
 import type { HugoOrbState } from "@/lib/types";
-import { REALTIME_TURN_SILENCE_DURATION_MS } from "@/lib/constants";
 import { useReducedMotion } from "@/components/motion/useReducedMotion";
 import {
   playBargeInBlip,
@@ -62,6 +61,15 @@ const LEVEL_STATE_INTERVAL_MS = 55;
 // Per-frame smoothing factor toward the instantaneous target (lerp t).
 const LEVEL_ATTACK = 0.35;
 const LEVEL_DECAY = 0.12;
+
+// How long (ms) to hold the mic deaf at the very start of Hugo's FIRST spoken
+// turn on a cold voice session, to ride out the browser echo-canceller's
+// convergence window. See the "first-utterance echo guard" effect below for
+// the full rationale. Tunable: too short and cold-AEC echo still leaks; too
+// long and the user can't barge in early on turn one. ~1s covers the typical
+// AEC convergence time while barely touching barge-in (nobody interrupts in
+// the first second of Hugo's opening word).
+const ECHO_CONVERGENCE_GUARD_MS = 1000;
 const FALLBACK_REALTIME_INSTRUCTIONS =
   "You are Hugo, a concise realtime voice agent. Speak in short natural turns, use tools only when helpful, and recover gracefully from errors.";
 
@@ -88,6 +96,11 @@ export function useHugoRealtime(
   const [error, setError] = useState<string | null>(null);
   const [audioLevel, setAudioLevel] = useState(0);
   const micStreamRef = useRef<MediaStream | null>(null);
+  // First-utterance echo guard (see the effect further down): `armed` is set
+  // true on every fresh getUserMedia (i.e. every cold echo-canceller) and
+  // cleared once the guard fires, so it runs at most once per mic stream.
+  const echoGuardArmedRef = useRef(false);
+  const echoGuardTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   // The most recent tool name a call was made for — attached to error reports
   // so a provider-side failure right after a tool call is diagnosable
   // server-side instead of only visible as a client error banner.
@@ -126,17 +139,7 @@ export function useHugoRealtime(
       inputAudioTranscription: {},
       instructions: session?.instructions ?? FALLBACK_REALTIME_INSTRUCTIONS,
       voice: session?.voice ?? "alloy",
-      // The provider's default silence_duration_ms (200ms) ends a turn on any
-      // brief conversational pause — cutting the user off mid-sentence. Hugo
-      // then starts responding to the partial utterance while the user is
-      // still talking, and that overlap gets captured as a second, garbled
-      // turn once they continue (this is what a "first prompt gets
-      // interrupted by a hallucinated foreign-language second message"
-      // report traced back to — see REALTIME_TURN_SILENCE_DURATION_MS).
-      turnDetection: {
-        type: "server-vad" as const,
-        silenceDurationMs: REALTIME_TURN_SILENCE_DURATION_MS,
-      },
+      turnDetection: { type: "server-vad" as const },
     }),
     [session?.instructions, session?.voice],
   );
@@ -215,6 +218,43 @@ export function useHugoRealtime(
     flagsRef.current = { isCapturing, isPlaying };
   }, [isCapturing, isPlaying]);
 
+  // --- First-utterance echo guard ---------------------------------------
+  //
+  // On a cold voice session the browser's acoustic echo canceller (AEC) has
+  // not converged yet, so the first ~second of Hugo's OWN speech leaks from
+  // the speakers back into the still-open mic. server-VAD hears that leak as
+  // the user starting to talk, truncates Hugo mid-response, and transcribes
+  // the echo as a phantom short turn (a stray "うん"/"はい") that Hugo then
+  // answers — the reported "the first message gets cut off and Hugo replies to
+  // a garbled second message" bug. AEC is already engaged (getUserMedia
+  // defaults echoCancellation on) but simply hasn't trained; the only reliable
+  // client lever during that window is to make the mic deaf to the echo.
+  //
+  // So: when Hugo begins his first spoken turn on a fresh mic, mute the mic
+  // *track* (`enabled = false` → silence, WITHOUT tearing down the SDK's
+  // capture graph) for the convergence window, then re-open it. Barge-in is
+  // untouched everywhere except that sub-second window at the very start of
+  // turn one — where a user does not interrupt anyway. Fires at most once per
+  // fresh getUserMedia (re-armed in toggleMic), i.e. once per cold AEC.
+  useEffect(() => {
+    if (status !== "connected" || !isPlaying || !echoGuardArmedRef.current) {
+      return;
+    }
+    echoGuardArmedRef.current = false;
+    const tracks = micStreamRef.current?.getAudioTracks() ?? [];
+    if (tracks.length === 0) return;
+    for (const track of tracks) track.enabled = false;
+    if (echoGuardTimerRef.current) clearTimeout(echoGuardTimerRef.current);
+    echoGuardTimerRef.current = setTimeout(() => {
+      echoGuardTimerRef.current = null;
+      // Re-open only tracks still live — the user may have toggled the mic off
+      // during the window (which stops the tracks entirely).
+      for (const track of micStreamRef.current?.getAudioTracks() ?? []) {
+        track.enabled = true;
+      }
+    }, ECHO_CONVERGENCE_GUARD_MS);
+  }, [status, isPlaying]);
+
   // Tear down the AudioContext / analyser chain. Safe to call repeatedly.
   const teardownAnalyser = useCallback(() => {
     try {
@@ -288,6 +328,13 @@ export function useHugoRealtime(
     micStreamRef.current?.getTracks().forEach((t) => t.stop());
     micStreamRef.current = null;
     teardownAnalyser();
+    // Cancel any pending echo-guard re-enable — the tracks it would touch are
+    // gone, and the guard must re-arm from scratch on the next fresh mic.
+    if (echoGuardTimerRef.current) {
+      clearTimeout(echoGuardTimerRef.current);
+      echoGuardTimerRef.current = null;
+    }
+    echoGuardArmedRef.current = false;
   }, [stopAudioCapture, teardownAnalyser]);
 
   const disconnect = useCallback(() => {
@@ -302,8 +349,22 @@ export function useHugoRealtime(
       return;
     }
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      // Explicitly request the browser's audio processing. These already
+      // default to `true`, so this is intent-documenting hygiene, NOT the echo
+      // fix — browser AEC cannot reliably cancel the SDK's Web-Audio-played TTS
+      // (separate AudioContext, WebSocket transport, no RTCPeerConnection), so
+      // the real self-echo mitigation is the first-utterance guard below.
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true,
+        },
+      });
       micStreamRef.current = stream;
+      // A fresh mic stream means the echo canceller starts cold — re-arm the
+      // first-utterance guard so it fires on Hugo's next spoken turn.
+      echoGuardArmedRef.current = true;
       // Await the blip BEFORE actually starting capture — same mic-bleed
       // hazard as the connect chime.
       if (!reducedMotion) await playMicToggleBlip(true);
