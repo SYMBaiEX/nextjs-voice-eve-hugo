@@ -59,6 +59,15 @@ function Vercel() {
     id: "vercel",
     name: "Vercel",
     type: "oauth" as const,
+    // Required even though we hand-specify authorization/token/userinfo below
+    // (skipping OIDC discovery) — @convex-dev/auth's oAuthConfigToInternalProvider
+    // falls back to a literal placeholder issuer ("theremustbeastringhere.dev")
+    // when `issuer` is omitted. Vercel issues a real ID token (because we
+    // request the `openid` scope) whose "iss" claim oauth4webapi validates
+    // UNCONDITIONALLY once an id_token is present, regardless of provider type
+    // — so the placeholder must match Vercel's real issuer or every callback
+    // fails with "unexpected JWT iss claim value" and bounces back to sign-in.
+    issuer: "https://vercel.com",
     clientId: process.env.AUTH_VERCEL_ID,
     clientSecret: process.env.AUTH_VERCEL_SECRET,
     authorization: {
