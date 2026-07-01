@@ -217,11 +217,26 @@ export function SettingsClient() {
 
   const prefs = me?.preferences ?? {};
 
+  // Feature-detected client-side only (SSR/first paint assume unsupported —
+  // matches this file's other browser-API checks, no hydration mismatch).
+  const [wakeWordSupported, setWakeWordSupported] = useState(false);
+  useEffect(() => {
+    const detect = () => {
+      const w = window as unknown as {
+        SpeechRecognition?: unknown;
+        webkitSpeechRecognition?: unknown;
+      };
+      setWakeWordSupported(!!(w.SpeechRecognition ?? w.webkitSpeechRecognition));
+    };
+    detect();
+  }, []);
+
   const savePreference = useCallback(
     async (patch: {
       voice?: string;
       conciseVoice?: boolean;
       reducedMotion?: boolean;
+      wakeWordEnabled?: boolean;
     }) => {
       if (!canRunProtectedQueries) return;
       setSavingPref(true);
@@ -532,6 +547,29 @@ export function SettingsClient() {
             pending={me === undefined || savingPref}
             onChange={(next) => void savePreference({ reducedMotion: next })}
           />
+
+          <Separator />
+
+          {wakeWordSupported ? (
+            <ToggleRow
+              label='"Hey Hugo" wake word'
+              description="Say “Hey Hugo” to start a voice session hands-free. Off by default; a visible indicator shows whenever it's actively listening."
+              checked={prefs.wakeWordEnabled ?? false}
+              pending={me === undefined || savingPref}
+              onChange={(next) => void savePreference({ wakeWordEnabled: next })}
+            />
+          ) : (
+            <div className="flex items-center justify-between gap-4 py-1 opacity-60">
+              <div className="flex flex-col">
+                <span className="text-sm font-medium text-text-primary">
+                  &quot;Hey Hugo&quot; wake word
+                </span>
+                <span className="text-xs text-text-muted">
+                  Not supported in this browser — try Chrome or Edge.
+                </span>
+              </div>
+            </div>
+          )}
         </CardContent>
       </Card>
 

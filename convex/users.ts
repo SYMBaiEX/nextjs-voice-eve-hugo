@@ -122,6 +122,7 @@ export const updatePreferences = mutation({
       reducedMotion: v.optional(v.boolean()),
       preferredTextModel: v.optional(v.string()),
       preferredRealtimeModel: v.optional(v.string()),
+      wakeWordEnabled: v.optional(v.boolean()),
     }),
   },
   handler: async (ctx, { preferences }) => {

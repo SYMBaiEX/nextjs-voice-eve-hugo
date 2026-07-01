@@ -27,6 +27,7 @@ import {
   useHugoRealtime,
   type HugoRealtimeSession,
 } from "@/hooks/useHugoRealtime";
+import { useWakeWord } from "@/hooks/useWakeWord";
 import { OrbSlot } from "@/components/hugo/OrbSlot";
 import {
   HugoTranscript,
@@ -491,6 +492,21 @@ function HugoSurfaceInner({
   );
 
   const voiceActive = !!session;
+
+  // "Hey Hugo" wake word — opt-in (Settings), never runs while a real voice
+  // session is already active (must not fight over the mic), and always
+  // paired with the visible `listening` indicator rendered near the mic
+  // button below.
+  const wakeWordWanted = !!me?.preferences?.wakeWordEnabled && !voiceActive;
+  const startVoiceRef = useRef(startVoice);
+  useEffect(() => {
+    startVoiceRef.current = startVoice;
+  }, [startVoice]);
+  const wakeWord = useWakeWord({
+    enabled: wakeWordWanted,
+    onWake: useCallback(() => void startVoiceRef.current(), []),
+  });
+
   const baseOrbState = voiceActive ? rt.orbState : "idle";
   // A tool call in flight takes over the orb visually — except while Hugo is
   // actually speaking or in an error state, which stay visible as-is.
@@ -677,17 +693,30 @@ function HugoSurfaceInner({
             className="flex items-end gap-2 rounded-2xl border border-border bg-surface-elevated/50 p-2 backdrop-blur-sm focus-within:border-hugo-cyan/40"
           >
             {/* Mic toggle */}
-            <Button
-              type="button"
-              variant={voiceActive ? "primary" : "subtle"}
-              size="icon"
-              onClick={() => (voiceActive ? void endVoice() : void startVoice())}
-              aria-pressed={voiceActive}
-              aria-label={voiceActive ? "End voice session" : "Start voice"}
-              className="shrink-0 rounded-full"
-            >
-              <Mic aria-hidden />
-            </Button>
+            <div className="relative shrink-0">
+              <Button
+                type="button"
+                variant={voiceActive ? "primary" : "subtle"}
+                size="icon"
+                onClick={() => (voiceActive ? void endVoice() : void startVoice())}
+                aria-pressed={voiceActive}
+                aria-label={voiceActive ? "End voice session" : "Start voice"}
+                className="rounded-full"
+              >
+                <Mic aria-hidden />
+              </Button>
+              {wakeWord.listening && (
+                <span
+                  role="status"
+                  title="Listening for “Hey Hugo”"
+                  aria-label="Listening for “Hey Hugo”"
+                  className="absolute -right-0.5 -top-0.5 flex size-3 items-center justify-center"
+                >
+                  <span className="absolute inline-flex size-full animate-ping rounded-full bg-hugo-cyan/70" />
+                  <span className="relative inline-flex size-2 rounded-full bg-hugo-cyan" />
+                </span>
+              )}
+            </div>
 
             <Textarea
               ref={textareaRef}

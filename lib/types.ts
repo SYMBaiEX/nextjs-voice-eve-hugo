@@ -101,4 +101,6 @@ export interface UserPreferences {
   preferredTextModel?: string;
   /** Preferred `provider/model` for realtime voice (falls back to global default). */
   preferredRealtimeModel?: string;
+  /** Opt-in "Hey Hugo" wake word (browser SpeechRecognition), off by default. */
+  wakeWordEnabled?: boolean;
 }

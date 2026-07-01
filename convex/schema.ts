@@ -24,6 +24,9 @@ const preferencesValidator = v.optional(
     reducedMotion: v.optional(v.boolean()),
     preferredTextModel: v.optional(v.string()),
     preferredRealtimeModel: v.optional(v.string()),
+    // Opt-in "Hey Hugo" wake word (browser SpeechRecognition) — never on by
+    // default, always paired with a visible listening indicator client-side.
+    wakeWordEnabled: v.optional(v.boolean()),
   }),
 );
 

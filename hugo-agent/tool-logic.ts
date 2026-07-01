@@ -380,12 +380,18 @@ export const TOOL_DEFS = {
 
   updateUserPreferences: toolDef({
     description:
-      "Update explicit profile preferences such as theme, voice, concise voice, or reduced motion.",
+      "Update explicit profile preferences such as theme, voice, concise voice, reduced motion, or the 'Hey Hugo' wake word.",
     inputSchema: z.object({
       theme: z.enum(["dark", "light", "system"]).optional(),
       voice: z.string().min(1).max(80).optional(),
       conciseVoice: z.boolean().optional(),
       reducedMotion: z.boolean().optional(),
+      wakeWordEnabled: z
+        .boolean()
+        .optional()
+        .describe(
+          "Only set this when the user explicitly asks to turn the wake word on or off.",
+        ),
     }),
     logic: async (ctx, preferences) => {
       const patch = preferences as Partial<UserPreferences>;
