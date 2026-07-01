@@ -4,7 +4,9 @@ import { useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useAuthActions } from "@convex-dev/auth/react";
+import { useQuery } from "convex/react";
 import { toast } from "sonner";
+import { api } from "@/convex/_generated/api";
 import { APP_NAME, APP_TAGLINE } from "@/lib/constants";
 import { Button } from "@/components/ui/button";
 import { Input, Label } from "@/components/ui/input";
@@ -60,6 +62,21 @@ export function AuthForm({ mode }: { mode: AuthMode }) {
   const copy = COPY[mode];
 
   const [submitting, setSubmitting] = useState(false);
+
+  // Show "Continue with Vercel" only when the provider is configured on the
+  // Convex deployment (public, no-auth query) — otherwise the button would 404.
+  const publicSettings = useQuery(api.settings.getPublic, {});
+  const vercelSignInEnabled =
+    (publicSettings as { vercelSignInEnabled?: boolean } | undefined)
+      ?.vercelSignInEnabled ?? false;
+
+  function startVercelSignIn() {
+    if (submitting) return;
+    const next = searchParams.get("next");
+    void signIn("vercel", {
+      redirectTo: next && next.startsWith("/") ? next : "/chat",
+    });
+  }
 
   async function onSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -178,6 +195,34 @@ export function AuthForm({ mode }: { mode: AuthMode }) {
           )}
         </Button>
       </form>
+
+      {vercelSignInEnabled && (
+        <>
+          <div className="my-5 flex items-center gap-3" aria-hidden>
+            <span className="h-px flex-1 bg-border" />
+            <span className="text-xs text-text-muted">or</span>
+            <span className="h-px flex-1 bg-border" />
+          </div>
+          <Button
+            type="button"
+            variant="outline"
+            size="lg"
+            className="w-full"
+            disabled={submitting}
+            onClick={startVercelSignIn}
+          >
+            <svg
+              viewBox="0 0 76 65"
+              className="size-3.5"
+              fill="currentColor"
+              aria-hidden
+            >
+              <path d="M37.527 0 75.054 65H0z" />
+            </svg>
+            Continue with Vercel
+          </Button>
+        </>
+      )}
 
       <p className="mt-6 text-center text-sm text-text-secondary">
         {copy.switchPrompt}{" "}

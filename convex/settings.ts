@@ -49,6 +49,10 @@ export const getPublic = query({
   handler: async (ctx) => {
     const result: Record<string, unknown> = {};
     for (const key of PUBLIC_KEYS) result[key] = await readSetting(ctx, key);
+    // Whether "Sign in with Vercel" is configured — lets the sign-in UI show
+    // the button only when it will actually work. Derived from the Convex env
+    // (AUTH_VERCEL_ID), not a stored setting.
+    result.vercelSignInEnabled = !!process.env.AUTH_VERCEL_ID;
     return result;
   },
 });
