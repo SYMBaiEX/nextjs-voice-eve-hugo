@@ -509,6 +509,84 @@ export const TOOL_DEFS = {
     },
   }),
 
+  createTask: toolDef({
+    description:
+      "Create a durable task/to-do item for the signed-in user, optionally with a due date and priority.",
+    inputSchema: z.object({
+      title: z.string().min(1).max(200),
+      dueDate: z
+        .string()
+        .optional()
+        .describe("An ISO 8601 date/time if the task has a deadline."),
+      priority: z.enum(["low", "medium", "high"]).default("medium"),
+    }),
+    logic: async (ctx, { title, dueDate, priority }) => {
+      const parsed = dueDate ? new Date(dueDate) : undefined;
+      const dueDateMs =
+        parsed && !Number.isNaN(parsed.getTime()) ? parsed.getTime() : undefined;
+      const taskId = await fetchMutation(
+        api.tasks.createTask,
+        { title, dueDate: dueDateMs, priority },
+        { token: ctx.token },
+      );
+      return { saved: true, taskId };
+    },
+  }),
+
+  listTasks: toolDef({
+    description:
+      "List the signed-in user's tasks. Defaults to pending (not yet completed) tasks.",
+    inputSchema: z.object({
+      status: z.enum(["pending", "completed", "archived"]).default("pending"),
+      limit: z.number().int().min(1).max(50).default(20),
+    }),
+    logic: async (ctx, { status, limit }) => {
+      const tasks = await fetchQuery(
+        api.tasks.listOwnTasks,
+        { status, limit },
+        { token: ctx.token },
+      );
+      return tasks.map((t) => ({
+        id: t._id,
+        title: t.title,
+        status: t.status,
+        priority: t.priority,
+        dueDate: t.dueDate ? new Date(t.dueDate).toISOString() : null,
+        completedAt: t.completedAt ? new Date(t.completedAt).toISOString() : null,
+      }));
+    },
+  }),
+
+  completeTask: toolDef({
+    description: "Mark one of the signed-in user's tasks as completed.",
+    inputSchema: z.object({
+      taskId: z.string().min(1).describe("The task's id, from listTasks."),
+    }),
+    logic: async (ctx, { taskId }) => {
+      await fetchMutation(
+        api.tasks.completeTask,
+        { taskId: taskId as Id<"tasks"> },
+        { token: ctx.token },
+      );
+      return { completed: true, taskId };
+    },
+  }),
+
+  deleteTask: toolDef({
+    description: "Remove one of the signed-in user's tasks.",
+    inputSchema: z.object({
+      taskId: z.string().min(1).describe("The task's id, from listTasks."),
+    }),
+    logic: async (ctx, { taskId }) => {
+      await fetchMutation(
+        api.tasks.deleteTask,
+        { taskId: taskId as Id<"tasks"> },
+        { token: ctx.token },
+      );
+      return { deleted: true, taskId };
+    },
+  }),
+
   // ---- Admin-only ----------------------------------------------------------
 
   getSystemUsageSummary: toolDef({
@@ -569,6 +647,10 @@ export const USER_TOOL_NAMES = [
   "searchUserConversations",
   "getWeather",
   "searchWeb",
+  "createTask",
+  "listTasks",
+  "completeTask",
+  "deleteTask",
 ] as const;
 
 export const ADMIN_TOOL_NAMES = [

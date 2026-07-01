@@ -237,6 +237,23 @@ export default defineSchema({
     .index("by_user_type", ["userId", "type"])
     .index("by_user_key", ["userId", "key"]),
 
+  tasks: defineTable({
+    userId: v.id("users"),
+    title: v.string(),
+    dueDate: v.optional(v.number()),
+    status: v.union(
+      v.literal("pending"),
+      v.literal("completed"),
+      v.literal("archived"),
+    ),
+    priority: v.union(v.literal("low"), v.literal("medium"), v.literal("high")),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+    completedAt: v.optional(v.number()),
+  })
+    .index("by_user", ["userId"])
+    .index("by_user_status", ["userId", "status"]),
+
   adminAuditLogs: defineTable({
     adminUserId: v.id("users"),
     action: v.string(),

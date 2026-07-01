@@ -743,6 +743,10 @@ const TOOL_TICKER_LABELS: Record<string, string> = {
   getSystemUsageSummary: "Checking system usage",
   getUserUsageSummary: "Checking usage",
   getVoiceSessionDiagnostics: "Checking voice diagnostics",
+  createTask: "Creating a task",
+  listTasks: "Checking your tasks",
+  completeTask: "Completing a task",
+  deleteTask: "Removing a task",
 };
 
 function toolTickerLabel(toolName: string): string {

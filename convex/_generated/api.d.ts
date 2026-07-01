@@ -20,6 +20,7 @@ import type * as model_authz from "../model/authz.js";
 import type * as model_usage from "../model/usage.js";
 import type * as seed from "../seed.js";
 import type * as settings from "../settings.js";
+import type * as tasks from "../tasks.js";
 import type * as toolCalls from "../toolCalls.js";
 import type * as usageEvents from "../usageEvents.js";
 import type * as users from "../users.js";
@@ -44,6 +45,7 @@ declare const fullApi: ApiFromModules<{
   "model/usage": typeof model_usage;
   seed: typeof seed;
   settings: typeof settings;
+  tasks: typeof tasks;
   toolCalls: typeof toolCalls;
   usageEvents: typeof usageEvents;
   users: typeof users;

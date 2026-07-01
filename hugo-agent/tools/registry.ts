@@ -107,6 +107,36 @@ export const USER_TOOLS: ToolMeta[] = [
     readOnly: true,
     requiresApproval: false,
   },
+  {
+    name: "createTask",
+    description:
+      "Create a durable task/to-do item for the signed-in user, optionally with a due date and priority.",
+    scope: "user",
+    readOnly: false,
+    requiresApproval: false,
+  },
+  {
+    name: "listTasks",
+    description:
+      "List the signed-in user's tasks. Defaults to pending (not yet completed) tasks.",
+    scope: "user",
+    readOnly: true,
+    requiresApproval: false,
+  },
+  {
+    name: "completeTask",
+    description: "Mark one of the signed-in user's tasks as completed.",
+    scope: "user",
+    readOnly: false,
+    requiresApproval: false,
+  },
+  {
+    name: "deleteTask",
+    description: "Remove one of the signed-in user's tasks.",
+    scope: "user",
+    readOnly: false,
+    requiresApproval: false,
+  },
 ];
 
 export const ADMIN_TOOLS: ToolMeta[] = [
