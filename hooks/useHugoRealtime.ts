@@ -5,6 +5,7 @@ import { experimental_useRealtime as useRealtime } from "@ai-sdk/react";
 import { gateway } from "@ai-sdk/gateway";
 import { utils } from "animejs";
 import type { HugoOrbState } from "@/lib/types";
+import { REALTIME_TURN_SILENCE_DURATION_MS } from "@/lib/constants";
 import { useReducedMotion } from "@/components/motion/useReducedMotion";
 import {
   playBargeInBlip,
@@ -125,7 +126,17 @@ export function useHugoRealtime(
       inputAudioTranscription: {},
       instructions: session?.instructions ?? FALLBACK_REALTIME_INSTRUCTIONS,
       voice: session?.voice ?? "alloy",
-      turnDetection: { type: "server-vad" as const },
+      // The provider's default silence_duration_ms (200ms) ends a turn on any
+      // brief conversational pause — cutting the user off mid-sentence. Hugo
+      // then starts responding to the partial utterance while the user is
+      // still talking, and that overlap gets captured as a second, garbled
+      // turn once they continue (this is what a "first prompt gets
+      // interrupted by a hallucinated foreign-language second message"
+      // report traced back to — see REALTIME_TURN_SILENCE_DURATION_MS).
+      turnDetection: {
+        type: "server-vad" as const,
+        silenceDurationMs: REALTIME_TURN_SILENCE_DURATION_MS,
+      },
     }),
     [session?.instructions, session?.voice],
   );

@@ -10,7 +10,11 @@ import type { Doc, Id } from "@/convex/_generated/dataModel";
 import { getRealtimeModel } from "@/lib/ai";
 import { getUserGateway } from "@/lib/user-gateway";
 import { rateLimit } from "@/lib/rate-limit";
-import { REALTIME_TOKEN_RATE, REALTIME_TOKEN_TTL_SECONDS } from "@/lib/constants";
+import {
+  REALTIME_TOKEN_RATE,
+  REALTIME_TOKEN_TTL_SECONDS,
+  REALTIME_TURN_SILENCE_DURATION_MS,
+} from "@/lib/constants";
 import { track } from "@/lib/telemetry";
 import { buildHugoTools } from "@/hugo-agent/tools";
 import type { RealtimeSessionConfig } from "@/lib/types";
@@ -235,7 +239,10 @@ export async function POST(req: Request) {
       ? { instructions: requestedConfig.instructions }
       : {}),
     voice: requestedConfig?.voice ?? session.voice,
-    turnDetection: { type: "server-vad" as const },
+    turnDetection: {
+      type: "server-vad" as const,
+      silenceDurationMs: REALTIME_TURN_SILENCE_DURATION_MS,
+    },
   };
 
   // Mint for the same realtime model the voice session was created with, so

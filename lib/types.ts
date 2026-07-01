@@ -66,7 +66,7 @@ export interface RealtimeSessionConfig {
   voice: string;
   instructions?: string;
   inputAudioTranscription?: Record<string, never>;
-  turnDetection: { type: "server-vad" };
+  turnDetection: { type: "server-vad"; silenceDurationMs?: number };
 }
 
 export interface RealtimeTokenResponse {

@@ -75,6 +75,17 @@ export const REALTIME_TOOL_RATE = { max: 30, windowMs: 60_000 } as const;
 /** Realtime browser token TTL hint (informational; the gateway controls actual TTL). */
 export const REALTIME_TOKEN_TTL_SECONDS = 60;
 
+/**
+ * How long (ms) the user must be silent before server-VAD ends their turn.
+ * The provider default is 200ms, which is aggressive enough to cut a user off
+ * mid-sentence on an ordinary conversational pause — the resulting premature
+ * response then plays back while the user is still talking, and that overlap
+ * gets picked up as a second, garbled/hallucinated turn once they continue.
+ * 700ms gives a natural pause room to breathe without making Hugo feel
+ * sluggish to respond.
+ */
+export const REALTIME_TURN_SILENCE_DURATION_MS = 700;
+
 /** Voices exposed in the UI. The gateway/model determines true availability. */
 export const VOICE_OPTIONS = [
   "alloy",
