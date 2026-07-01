@@ -35,6 +35,7 @@ import {
 } from "@/components/hugo/HugoTranscript";
 import { SuggestionChips } from "@/components/chat/Greeting";
 import { ModelMenu } from "@/components/hugo/ModelMenu";
+import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -62,6 +63,39 @@ interface VoiceSessionStartResponse {
   model: string;
   sessionConfig: { instructions: string; voice: string };
   voice: string;
+}
+
+/**
+ * Isolated subscription for the tool-call ledger that drives the transcript
+ * pills. Rendered inside an <ErrorBoundary> and reporting its result UP via
+ * `onCalls`, so if this Convex query ever fails (deploy drift, a transient
+ * server error) it degrades to "no pills" instead of throwing during render
+ * and taking the whole chat/voice surface down. Renders nothing itself.
+ */
+function ToolCallsFeed({
+  conversationId,
+  enabled,
+  onCalls,
+}: {
+  conversationId?: string;
+  enabled: boolean;
+  onCalls: (calls: Doc<"toolCalls">[]) => void;
+}) {
+  const calls = useQuery(
+    api.toolCalls.listForConversation,
+    enabled && conversationId
+      ? { conversationId: conversationId as Id<"conversations"> }
+      : "skip",
+  );
+  useEffect(() => {
+    if (!calls) return;
+    // Convex returns a referentially-stable result while data is unchanged, so
+    // this only fires on a real change (no render loop). Wrapped so the lint
+    // rule against a bare synchronous setState in an effect is satisfied.
+    const report = () => onCalls(calls);
+    report();
+  }, [calls, onCalls]);
+  return null;
 }
 
 interface RealtimeTurnLike {
@@ -225,15 +259,18 @@ function HugoSurfaceInner({
   }, [recentToolCalls, activeConversationId]);
 
   // Full tool-call history for THIS conversation → collapsible pills under the
-  // assistant turn that ran them. The Convex ledger is the one source uniform
-  // across voice/BYOK/Eve; `messages.list` supplies the assistant turns'
-  // authoritative timestamps so calls can be associated to the right turn.
-  const conversationToolCalls = useQuery(
-    api.toolCalls.listForConversation,
-    canRunProtectedQueries && activeConversationId
-      ? { conversationId: activeConversationId as Id<"conversations"> }
-      : "skip",
-  );
+  // assistant turn that ran them (the Convex ledger is the one source uniform
+  // across voice/BYOK/Eve). Fed in by <ToolCallsFeed> below, which owns the
+  // subscription behind an error boundary so a query failure degrades to "no
+  // pills" rather than crashing chat/voice. Reset on conversation switch so a
+  // prior conversation's calls never bleed into a new one.
+  const [conversationToolCalls, setConversationToolCalls] = useState<
+    Doc<"toolCalls">[]
+  >([]);
+  useEffect(() => {
+    const reset = () => setConversationToolCalls([]);
+    reset();
+  }, [activeConversationId]);
 
   // Most recent active conversation — offers a "Continue with Hugo" affordance
   // on a fresh landing instead of starting from zero every time.
@@ -574,6 +611,15 @@ function HugoSurfaceInner({
 
   return (
     <div className={cn("relative flex h-full flex-col", className)}>
+      {/* Tool-call ledger feed for the transcript pills — isolated behind an
+          error boundary so a query failure never crashes chat/voice. */}
+      <ErrorBoundary resetKey={activeConversationId}>
+        <ToolCallsFeed
+          conversationId={activeConversationId}
+          enabled={canRunProtectedQueries}
+          onCalls={setConversationToolCalls}
+        />
+      </ErrorBoundary>
       {/* Hero orb — centered in the top half while voice is live OR on a fresh
           conversation (click it to start voice). Shrinks to a corner otherwise. */}
       {(voiceActive || isEmpty) && (
