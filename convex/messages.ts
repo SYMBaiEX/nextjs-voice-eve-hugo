@@ -1,5 +1,7 @@
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
+import type { MutationCtx } from "./_generated/server";
+import type { Id } from "./_generated/dataModel";
 import {
   requireUser,
   requireAdmin,
@@ -22,6 +24,33 @@ const modalityValidator = v.union(
   v.literal("audio"),
   v.literal("tool"),
 );
+
+/**
+ * Link a conversation's still-unclaimed tool calls to the assistant message
+ * they ran for. Tool calls are logged mid-turn, before the assistant message
+ * exists, so we stamp them here when that message lands — the unclaimed calls
+ * for this conversation are exactly this turn's (the previous turn's were
+ * claimed by its own assistant message). Lets pills attach to the exact turn
+ * instead of a timestamp guess.
+ */
+async function claimToolCallsForMessage(
+  ctx: MutationCtx,
+  conversationId: Id<"conversations">,
+  userId: Id<"users">,
+  messageId: Id<"messages">,
+): Promise<void> {
+  const unclaimed = await ctx.db
+    .query("toolCalls")
+    .withIndex("by_conversation_message", (q) =>
+      q.eq("conversationId", conversationId).eq("messageId", undefined),
+    )
+    .collect();
+  for (const call of unclaimed) {
+    if (call.userId === userId) {
+      await ctx.db.patch(call._id, { messageId });
+    }
+  }
+}
 
 /** Ordered messages for a conversation (owner or admin). */
 export const list = query({
@@ -87,6 +116,16 @@ export const append = mutation({
       patch.title = args.content.slice(0, 60) || convo.title;
     }
     await ctx.db.patch(args.conversationId, patch);
+
+    // An assistant turn owns the tool calls that ran to produce it.
+    if (args.role === "assistant") {
+      await claimToolCallsForMessage(
+        ctx,
+        args.conversationId,
+        convo.userId,
+        messageId,
+      );
+    }
 
     return messageId;
   },
@@ -157,6 +196,14 @@ export const appendVoiceTurn = mutation({
         status: "active",
         turnCount: session.turnCount + 1,
       });
+    } else {
+      // An assistant turn owns the tool calls that ran to produce it.
+      await claimToolCallsForMessage(
+        ctx,
+        session.conversationId,
+        session.userId,
+        messageId,
+      );
     }
 
     return messageId;

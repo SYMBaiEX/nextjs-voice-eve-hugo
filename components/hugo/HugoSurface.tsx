@@ -234,12 +234,6 @@ function HugoSurfaceInner({
       ? { conversationId: activeConversationId as Id<"conversations"> }
       : "skip",
   );
-  const conversationMessages = useQuery(
-    api.messages.list,
-    canRunProtectedQueries && activeConversationId
-      ? { conversationId: activeConversationId as Id<"conversations">, limit: 100 }
-      : "skip",
-  );
 
   // Most recent active conversation — offers a "Continue with Hugo" affordance
   // on a fresh landing instead of starting from zero every time.
@@ -379,12 +373,12 @@ function HugoSurfaceInner({
     [messages, liveVoiceOverlay],
   );
 
-  // Bucket each ledger tool-call under the assistant turn it belongs to. With
-  // no message↔toolCall foreign key we associate by time: a call attaches to
-  // the first persisted assistant message whose createdAt is at/after the
-  // call's startedAt (the answer produced once the tool returned). Calls newer
-  // than every persisted assistant message — the in-flight turn — attach to
-  // the last assistant turn on screen. Keyed by transcript turn id.
+  // Bucket each ledger tool-call under the assistant turn it belongs to. Each
+  // call carries the `messageId` of the assistant message it ran for (stamped
+  // when that message was appended), which is that turn's transcript id — so
+  // historical placement is exact. A still-unclaimed call (in flight), or one
+  // just claimed to a turn not re-seeded on screen yet, attaches to the current
+  // (last) assistant turn.
   const toolCallsByTurnId = useMemo(() => {
     const map = new Map<string, Doc<"toolCalls">[]>();
     if (!conversationToolCalls?.length) return map;
@@ -397,11 +391,6 @@ function HugoSurfaceInner({
     const lastTurnId = assistantTurnIds[assistantTurnIds.length - 1];
     const onScreen = new Set(assistantTurnIds);
 
-    const assistantRows = (conversationMessages ?? [])
-      .filter((m) => m.role === "assistant")
-      .map((m) => ({ id: m._id as string, createdAt: m.createdAt }))
-      .sort((a, b) => a.createdAt - b.createdAt);
-
     const push = (turnId: string, call: Doc<"toolCalls">) => {
       const arr = map.get(turnId);
       if (arr) arr.push(call);
@@ -409,12 +398,12 @@ function HugoSurfaceInner({
     };
 
     for (const call of conversationToolCalls) {
-      const match = assistantRows.find((r) => r.createdAt >= call.startedAt);
-      if (match && onScreen.has(match.id)) push(match.id, call);
+      const mid = call.messageId;
+      if (mid && onScreen.has(mid)) push(mid, call);
       else push(lastTurnId, call);
     }
     return map;
-  }, [conversationToolCalls, conversationMessages, transcript]);
+  }, [conversationToolCalls, transcript]);
 
   // ── Voice start / connect / end (lifted from HugoVoicePanel) ──
   const startVoice = useCallback(async () => {

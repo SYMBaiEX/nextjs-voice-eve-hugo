@@ -202,6 +202,10 @@ export default defineSchema({
   toolCalls: defineTable({
     userId: v.id("users"),
     conversationId: v.optional(v.id("conversations")),
+    // The assistant message this call ran for — set when that message is
+    // appended (it doesn't exist yet at call time), so pills attach to the
+    // exact turn instead of a timestamp guess. Undefined while in flight.
+    messageId: v.optional(v.id("messages")),
     toolName: v.string(),
     approvalStatus: v.union(
       v.literal("not_required"),
@@ -217,6 +221,9 @@ export default defineSchema({
   })
     .index("by_user", ["userId"])
     .index("by_conversation", ["conversationId"])
+    // Find a conversation's still-unclaimed calls (messageId undefined) to
+    // stamp them when its assistant message lands.
+    .index("by_conversation_message", ["conversationId", "messageId"])
     .index("by_approvalStatus", ["approvalStatus"])
     .index("by_approvalStatus_started", ["approvalStatus", "startedAt"])
     .index("by_started", ["startedAt"]),
