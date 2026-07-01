@@ -20,6 +20,7 @@ import { cn, initials } from "@/lib/utils";
 import { Avatar } from "@/components/ui/misc";
 import { Logo } from "@/components/layout/Logo";
 import { ThemeToggle } from "@/components/layout/ThemeToggle";
+import { useExitAnimation } from "@/components/motion/useExitAnimation";
 import { useAuthTransition } from "@/components/providers/ConvexClientProvider";
 import {
   SidebarHistory,
@@ -152,7 +153,7 @@ export function AppSidebar({
           onClick={onNew}
           disabled={creating}
           className={cn(
-            "flex h-9 w-full items-center gap-2 rounded-lg px-3 text-sm font-medium text-text-secondary transition-colors outline-none hover:bg-surface-elevated hover:text-text-primary focus-visible:ring-2 focus-visible:ring-hugo-cyan/50 disabled:opacity-50",
+            "flex h-9 w-full items-center gap-2 rounded-lg px-3 text-sm font-medium text-text-secondary transition-colors duration-fast ease-hugo outline-none hover:bg-surface-elevated hover:text-text-primary focus-visible:ring-2 focus-visible:ring-hugo-cyan/50 disabled:opacity-50",
             collapsed && "lg:hidden",
           )}
         >
@@ -216,7 +217,7 @@ export function AppSidebar({
         ) : (
           <Link
             href="/settings"
-            className="flex items-center gap-2.5 rounded-md px-2.5 py-2 text-sm text-text-secondary transition-colors outline-none hover:bg-surface-elevated hover:text-text-primary focus-visible:bg-surface-elevated focus-visible:text-text-primary"
+            className="flex items-center gap-2.5 rounded-md px-2.5 py-2 text-sm text-text-secondary transition-colors duration-fast ease-hugo outline-none hover:bg-surface-elevated hover:text-text-primary focus-visible:bg-surface-elevated focus-visible:text-text-primary"
           >
             <Settings aria-hidden className="size-4 shrink-0 text-text-muted" />
             Settings
@@ -239,6 +240,7 @@ function SidebarUserNav({ collapsed }: { collapsed: boolean }) {
     canRunProtectedQueries ? {} : "skip",
   );
   const [open, setOpen] = useState(false);
+  const rendered = useExitAnimation(open, 180);
   const ref = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -284,7 +286,7 @@ function SidebarUserNav({ collapsed }: { collapsed: boolean }) {
         aria-expanded={open}
         aria-label="Open account menu"
         className={cn(
-          "flex w-full items-center gap-2 rounded-md px-2 py-2 text-left transition-colors outline-none hover:bg-surface-elevated focus-visible:ring-2 focus-visible:ring-hugo-cyan/50",
+          "flex w-full items-center gap-2 rounded-md px-2 py-2 text-left transition-colors duration-fast ease-hugo outline-none hover:bg-surface-elevated focus-visible:ring-2 focus-visible:ring-hugo-cyan/50",
           collapsed && "lg:justify-center lg:px-0",
         )}
       >
@@ -300,11 +302,14 @@ function SidebarUserNav({ collapsed }: { collapsed: boolean }) {
         )}
       </button>
 
-      {open && (
+      {rendered && (
         <div
           role="menu"
           aria-label="Account"
-          className="panel animate-rise absolute bottom-[calc(100%+0.5rem)] left-0 z-50 w-56 overflow-hidden p-1.5 shadow-[0_12px_40px_-12px_rgba(0,0,0,0.6)]"
+          className={cn(
+            "panel absolute bottom-[calc(100%+0.5rem)] left-0 z-50 w-56 overflow-hidden p-1.5 shadow-[0_12px_40px_-12px_rgba(0,0,0,0.6)]",
+            open ? "animate-rise" : "animate-fall",
+          )}
         >
           <div className="px-2.5 py-2">
             <p className="truncate text-sm font-medium text-text-primary">
@@ -327,7 +332,7 @@ function SidebarUserNav({ collapsed }: { collapsed: boolean }) {
             role="menuitem"
             onClick={() => void handleSignOut()}
             disabled={isSigningOut}
-            className="mt-1 flex w-full items-center gap-2.5 rounded-md px-2.5 py-2 text-sm text-text-secondary transition-colors outline-none hover:bg-error/10 hover:text-error focus-visible:bg-error/10 focus-visible:text-error"
+            className="mt-1 flex w-full items-center gap-2.5 rounded-md px-2.5 py-2 text-sm text-text-secondary transition-colors duration-fast ease-hugo outline-none hover:bg-error/10 hover:text-error focus-visible:bg-error/10 focus-visible:text-error"
           >
             <LogOut aria-hidden className="size-4 shrink-0" />
             {isSigningOut ? "Signing out…" : "Sign out"}
@@ -358,7 +363,7 @@ function IconButton({
       disabled={disabled}
       aria-label={label}
       className={cn(
-        "inline-flex size-8 items-center justify-center rounded-md text-text-muted transition-colors outline-none hover:bg-surface-elevated hover:text-text-primary focus-visible:ring-2 focus-visible:ring-hugo-cyan/50 disabled:opacity-50",
+        "inline-flex size-8 items-center justify-center rounded-md text-text-muted transition-colors duration-fast ease-hugo outline-none hover:bg-surface-elevated hover:text-text-primary focus-visible:ring-2 focus-visible:ring-hugo-cyan/50 disabled:opacity-50",
         className,
       )}
     >
@@ -383,7 +388,7 @@ function IconLink({
       href={href}
       aria-label={label}
       className={cn(
-        "inline-flex size-8 items-center justify-center rounded-md text-text-muted transition-colors outline-none hover:bg-surface-elevated hover:text-text-primary focus-visible:ring-2 focus-visible:ring-hugo-cyan/50",
+        "inline-flex size-8 items-center justify-center rounded-md text-text-muted transition-colors duration-fast ease-hugo outline-none hover:bg-surface-elevated hover:text-text-primary focus-visible:ring-2 focus-visible:ring-hugo-cyan/50",
         className,
       )}
     >

@@ -6,6 +6,7 @@ import { ConvexClientProvider } from "@/components/providers/ConvexClientProvide
 import { ThemeProvider } from "@/components/providers/ThemeProvider";
 import { AppToaster } from "@/components/providers/AppToaster";
 import { OrbStageProvider } from "@/components/hugo/orb-stage";
+import { PageTransition } from "@/components/layout/PageTransition";
 import { APP_NAME, APP_TAGLINE } from "@/lib/constants";
 
 const geistSans = Geist({
@@ -43,7 +44,9 @@ export default function RootLayout({
         <body className="min-h-full">
           <ThemeProvider>
             <ConvexClientProvider>
-              <OrbStageProvider>{children}</OrbStageProvider>
+              <OrbStageProvider>
+                <PageTransition>{children}</PageTransition>
+              </OrbStageProvider>
               <AppToaster />
             </ConvexClientProvider>
           </ThemeProvider>

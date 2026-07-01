@@ -38,7 +38,7 @@ export default async function AdminLayout({
     <div className="flex min-h-dvh flex-col bg-background">
       {/* Admin top bar — distinct from the app TopNav, marked with an Admin badge. */}
       <header className="sticky top-0 z-40 w-full border-b border-border bg-background/80 backdrop-blur-md">
-        <div className="mx-auto flex h-14 w-full max-w-7xl items-center justify-between gap-4 px-4 sm:px-6">
+        <div className="animate-rise mx-auto flex h-14 w-full max-w-7xl items-center justify-between gap-4 px-4 sm:px-6">
           <div className="flex items-center gap-3">
             <Logo />
             <Badge variant="cyan" className="uppercase tracking-wider">
@@ -63,7 +63,7 @@ export default async function AdminLayout({
 
       <div className="mx-auto flex w-full max-w-7xl flex-1 flex-col gap-6 px-4 py-6 sm:px-6 lg:flex-row">
         {/* Section nav: static rail on desktop, collapsible on mobile. */}
-        <aside className="shrink-0 lg:w-56" aria-label="Admin navigation">
+        <aside className="animate-rise shrink-0 lg:w-56" aria-label="Admin navigation">
           <div className="lg:sticky lg:top-20 lg:space-y-4">
             <AdminNav />
             {me.email ? (

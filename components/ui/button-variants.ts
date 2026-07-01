@@ -7,7 +7,7 @@ import { cva, type VariantProps } from "class-variance-authority";
  * would make it a client reference that cannot be invoked on the server.
  */
 export const buttonVariants = cva(
-  "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-none text-sm font-medium transition-all outline-none focus-visible:ring-2 focus-visible:ring-hugo-cyan/60 disabled:pointer-events-none disabled:opacity-50 [&_svg]:size-4 [&_svg]:shrink-0 cursor-pointer select-none",
+  "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-none text-sm font-medium transition-all duration-fast ease-hugo outline-none focus-visible:ring-2 focus-visible:ring-hugo-cyan/60 disabled:pointer-events-none disabled:opacity-50 [&_svg]:size-4 [&_svg]:shrink-0 cursor-pointer select-none",
   {
     variants: {
       variant: {

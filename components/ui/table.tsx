@@ -27,7 +27,13 @@ export function TBody({ className, ...props }: React.HTMLAttributes<HTMLTableSec
 
 export function TR({ className, ...props }: React.HTMLAttributes<HTMLTableRowElement>) {
   return (
-    <tr className={cn("transition-colors hover:bg-surface-elevated/50", className)} {...props} />
+    <tr
+      className={cn(
+        "transition-colors duration-fast ease-hugo hover:bg-surface-elevated/50",
+        className,
+      )}
+      {...props}
+    />
   );
 }
 

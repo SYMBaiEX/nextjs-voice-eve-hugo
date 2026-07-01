@@ -6,6 +6,8 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input, Label } from "@/components/ui/input";
 import { Spinner } from "@/components/ui/misc";
+import { cn } from "@/lib/utils";
+import { useExitAnimation } from "@/components/motion/useExitAnimation";
 
 /**
  * ApiKeyDialog — a hand-built modal (overlay + panel) for saving/removing a
@@ -63,6 +65,8 @@ export function ApiKeyDialog({
     return () => document.removeEventListener("keydown", onKey);
   }, [open, onClose]);
 
+  const rendered = useExitAnimation(open, 180);
+
   const busy = submitting || removing;
 
   const save = useCallback(async () => {
@@ -114,7 +118,7 @@ export function ApiKeyDialog({
     }
   }, [busy, onClose, copy.endpoint, copy.keyLabel]);
 
-  if (!open) return null;
+  if (!rendered) return null;
 
   return (
     <div
@@ -127,9 +131,17 @@ export function ApiKeyDialog({
         type="button"
         aria-label="Close"
         onClick={onClose}
-        className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+        className={cn(
+          "absolute inset-0 bg-black/60 backdrop-blur-sm transition-opacity duration-base",
+          open ? "opacity-100" : "opacity-0",
+        )}
       />
-      <div className="panel animate-rise relative z-10 w-full max-w-md p-5 shadow-[0_24px_60px_-12px_rgba(0,0,0,0.7)]">
+      <div
+        className={cn(
+          "panel relative z-10 w-full max-w-md p-5 shadow-[0_24px_60px_-12px_rgba(0,0,0,0.7)]",
+          open ? "animate-rise" : "animate-fall",
+        )}
+      >
         <div className="flex items-start gap-3">
           <div className="mt-0.5 flex size-9 shrink-0 items-center justify-center rounded-full border border-hugo-cyan/30 bg-hugo-cyan/10 text-hugo-cyan">
             <KeyRound aria-hidden className="size-4" />

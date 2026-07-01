@@ -14,6 +14,7 @@ import { Avatar, Separator } from "@/components/ui/misc";
 import { Logo } from "@/components/layout/Logo";
 import { ThemeToggle } from "@/components/layout/ThemeToggle";
 import { useReducedMotion } from "@/components/motion/useReducedMotion";
+import { useExitAnimation } from "@/components/motion/useExitAnimation";
 import { useAuthTransition } from "@/components/providers/ConvexClientProvider";
 
 interface MenuLink {
@@ -46,6 +47,7 @@ function UserMenu() {
     canRunProtectedQueries ? {} : "skip",
   );
   const [open, setOpen] = useState(false);
+  const rendered = useExitAnimation(open, 180);
   const containerRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
 
@@ -100,7 +102,7 @@ function UserMenu() {
         aria-expanded={open}
         aria-label="Open account menu"
         className={cn(
-          "flex items-center gap-2 rounded-full border border-border bg-surface-elevated/60 py-1 pl-1 pr-2.5 transition-colors outline-none hover:border-border-strong focus-visible:ring-2 focus-visible:ring-hugo-cyan/60",
+          "flex items-center gap-2 rounded-full border border-border bg-surface-elevated/60 py-1 pl-1 pr-2.5 transition-colors duration-fast ease-hugo outline-none hover:border-border-strong focus-visible:ring-2 focus-visible:ring-hugo-cyan/60",
           open && "border-border-strong",
         )}
       >
@@ -110,11 +112,14 @@ function UserMenu() {
         </span>
       </button>
 
-      {open && (
+      {rendered && (
         <div
           role="menu"
           aria-label="Account"
-          className="panel animate-rise absolute right-0 top-[calc(100%+0.5rem)] z-50 w-60 overflow-hidden p-1.5 shadow-[0_12px_40px_-12px_rgba(0,0,0,0.6)]"
+          className={cn(
+            "panel absolute right-0 top-[calc(100%+0.5rem)] z-50 w-60 overflow-hidden p-1.5 shadow-[0_12px_40px_-12px_rgba(0,0,0,0.6)]",
+            open ? "animate-rise" : "animate-fall",
+          )}
         >
           <div className="px-2.5 py-2">
             <p className="truncate text-sm font-medium text-text-primary">
@@ -134,7 +139,7 @@ function UserMenu() {
                 href={href}
                 role="menuitem"
                 onClick={close}
-                className="flex items-center gap-2.5 rounded-md px-2.5 py-2 text-sm text-text-secondary transition-colors outline-none hover:bg-surface-elevated hover:text-text-primary focus-visible:bg-surface-elevated focus-visible:text-text-primary"
+                className="flex items-center gap-2.5 rounded-md px-2.5 py-2 text-sm text-text-secondary transition-colors duration-fast ease-hugo outline-none hover:bg-surface-elevated hover:text-text-primary focus-visible:bg-surface-elevated focus-visible:text-text-primary"
               >
                 <Icon className="size-4 shrink-0 text-text-muted" />
                 {linkLabel}
@@ -147,7 +152,7 @@ function UserMenu() {
             role="menuitem"
             onClick={handleSignOut}
             disabled={isSigningOut}
-            className="flex w-full items-center gap-2.5 rounded-md px-2.5 py-2 text-sm text-text-secondary transition-colors outline-none hover:bg-error/10 hover:text-error focus-visible:bg-error/10 focus-visible:text-error"
+            className="flex w-full items-center gap-2.5 rounded-md px-2.5 py-2 text-sm text-text-secondary transition-colors duration-fast ease-hugo outline-none hover:bg-error/10 hover:text-error focus-visible:bg-error/10 focus-visible:text-error"
           >
             <LogOut className="size-4 shrink-0" />
             {isSigningOut ? "Signing out..." : "Sign out"}

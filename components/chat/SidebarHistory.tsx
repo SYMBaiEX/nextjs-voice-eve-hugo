@@ -7,6 +7,7 @@ import { toast } from "sonner";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
 import { cn } from "@/lib/utils";
+import { useExitAnimation } from "@/components/motion/useExitAnimation";
 
 /**
  * SidebarHistory — the conversation list for the chat sidebar.
@@ -104,7 +105,7 @@ export function SidebarHistory({
               type="button"
               onClick={() => toggleGroup(group.label)}
               aria-expanded={!isCollapsed}
-              className="flex items-center gap-1 rounded-md px-2 py-1 text-[0.65rem] font-mono uppercase tracking-wider text-text-muted/80 transition-colors outline-none hover:text-text-secondary focus-visible:ring-2 focus-visible:ring-hugo-cyan/40"
+              className="flex items-center gap-1 rounded-md px-2 py-1 text-[0.65rem] font-mono uppercase tracking-wider text-text-muted/80 transition-colors duration-fast ease-hugo outline-none hover:text-text-secondary focus-visible:ring-2 focus-visible:ring-hugo-cyan/40"
             >
               <ChevronDown
                 aria-hidden
@@ -145,6 +146,7 @@ function ConversationRow({
   const setStatus = useMutation(api.conversations.setStatus);
 
   const [menuOpen, setMenuOpen] = useState(false);
+  const menuRendered = useExitAnimation(menuOpen, 180);
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(conversation.title);
   const rowRef = useRef<HTMLDivElement>(null);
@@ -238,7 +240,7 @@ function ConversationRow({
         onClick={() => onSelect(conversation._id)}
         aria-current={active ? "true" : undefined}
         className={cn(
-          "flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-left text-sm transition-colors outline-none",
+          "flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-left text-sm transition-colors duration-fast ease-hugo outline-none",
           "focus-visible:ring-2 focus-visible:ring-hugo-cyan/50",
           active
             ? "bg-surface-elevated text-text-primary"
@@ -256,7 +258,7 @@ function ConversationRow({
         aria-expanded={menuOpen}
         onClick={() => setMenuOpen((v) => !v)}
         className={cn(
-          "absolute right-1 top-1/2 -translate-y-1/2 rounded-md p-1 text-text-muted transition-colors outline-none hover:bg-surface-elevated hover:text-text-primary focus-visible:ring-2 focus-visible:ring-hugo-cyan/50",
+          "absolute right-1 top-1/2 -translate-y-1/2 rounded-md p-1 text-text-muted transition-colors duration-fast ease-hugo outline-none hover:bg-surface-elevated hover:text-text-primary focus-visible:ring-2 focus-visible:ring-hugo-cyan/50",
           menuOpen
             ? "opacity-100"
             : "opacity-0 group-hover/row:opacity-100 group-focus-within/row:opacity-100",
@@ -265,17 +267,20 @@ function ConversationRow({
         <MoreHorizontal aria-hidden className="size-4" />
       </button>
 
-      {menuOpen && (
+      {menuRendered && (
         <div
           role="menu"
           aria-label="Conversation options"
-          className="panel animate-rise absolute right-1 top-[calc(100%-0.25rem)] z-50 w-40 overflow-hidden p-1 shadow-[0_12px_40px_-12px_rgba(0,0,0,0.6)]"
+          className={cn(
+            "panel absolute right-1 top-[calc(100%-0.25rem)] z-50 w-40 overflow-hidden p-1 shadow-[0_12px_40px_-12px_rgba(0,0,0,0.6)]",
+            menuOpen ? "animate-rise" : "animate-fall",
+          )}
         >
           <button
             type="button"
             role="menuitem"
             onClick={startRename}
-            className="flex w-full items-center gap-2.5 rounded-md px-2.5 py-2 text-sm text-text-secondary transition-colors outline-none hover:bg-surface-elevated hover:text-text-primary focus-visible:bg-surface-elevated focus-visible:text-text-primary"
+            className="flex w-full items-center gap-2.5 rounded-md px-2.5 py-2 text-sm text-text-secondary transition-colors duration-fast ease-hugo outline-none hover:bg-surface-elevated hover:text-text-primary focus-visible:bg-surface-elevated focus-visible:text-text-primary"
           >
             <Pencil aria-hidden className="size-4 shrink-0 text-text-muted" />
             Rename
@@ -284,7 +289,7 @@ function ConversationRow({
             type="button"
             role="menuitem"
             onClick={() => void handleDelete()}
-            className="flex w-full items-center gap-2.5 rounded-md px-2.5 py-2 text-sm text-text-secondary transition-colors outline-none hover:bg-error/10 hover:text-error focus-visible:bg-error/10 focus-visible:text-error"
+            className="flex w-full items-center gap-2.5 rounded-md px-2.5 py-2 text-sm text-text-secondary transition-colors duration-fast ease-hugo outline-none hover:bg-error/10 hover:text-error focus-visible:bg-error/10 focus-visible:text-error"
           >
             <Trash2 aria-hidden className="size-4 shrink-0" />
             Delete

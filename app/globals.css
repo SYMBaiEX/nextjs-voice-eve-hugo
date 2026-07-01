@@ -84,6 +84,12 @@
 
   --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
   --font-mono: var(--font-geist-mono), ui-monospace, "SF Mono", monospace;
+
+  /* Shared motion scale — micro hover/press feedback vs. structural show/hide,
+     one easing curve reused everywhere (matches hugo-rise/hugo-fall below). */
+  --transition-duration-fast: 150ms;
+  --transition-duration-base: 200ms;
+  --ease-hugo: cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 * {
@@ -181,6 +187,17 @@ body {
 
 .animate-rise {
   animation: hugo-rise 0.5s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+/* Symmetric exit companion to hugo-rise — used by useExitAnimation so dialogs
+ * and menus animate closed instead of vanishing instantly. */
+@keyframes hugo-fall {
+  from { opacity: 1; transform: translateY(0); }
+  to { opacity: 0; transform: translateY(8px); }
+}
+
+.animate-fall {
+  animation: hugo-fall 0.18s cubic-bezier(0.4, 0, 1, 1) both;
 }
 
 /*

@@ -11,6 +11,7 @@ import {
   type ModelOption,
 } from "@/lib/constants";
 import { cn } from "@/lib/utils";
+import { useExitAnimation } from "@/components/motion/useExitAnimation";
 import { useAuthTransition } from "@/components/providers/ConvexClientProvider";
 
 /**
@@ -35,6 +36,7 @@ export function ModelMenu() {
   );
   const update = useMutation(api.users.updatePreferences);
   const [open, setOpen] = useState(false);
+  const rendered = useExitAnimation(open, 180);
   const [query, setQuery] = useState("");
   const ref = useRef<HTMLDivElement>(null);
 
@@ -144,7 +146,7 @@ export function ModelMenu() {
         aria-expanded={open}
         aria-label="Select model"
         className={cn(
-          "relative z-10 -mb-px flex items-center gap-1.5 rounded-t-lg border border-b-0 border-border bg-surface-elevated/50 px-3 py-1.5 text-xs text-text-secondary backdrop-blur-sm transition-colors outline-none hover:text-text-primary focus-visible:ring-2 focus-visible:ring-hugo-cyan/50",
+          "relative z-10 -mb-px flex items-center gap-1.5 rounded-t-lg border border-b-0 border-border bg-surface-elevated/50 px-3 py-1.5 text-xs text-text-secondary backdrop-blur-sm transition-colors duration-fast ease-hugo outline-none hover:text-text-primary focus-visible:ring-2 focus-visible:ring-hugo-cyan/50",
           open && "text-text-primary",
         )}
       >
@@ -156,11 +158,14 @@ export function ModelMenu() {
         />
       </button>
 
-      {open && (
+      {rendered && (
         <div
           role="menu"
           aria-label="Model selection"
-          className="panel animate-rise absolute bottom-[calc(100%+0.5rem)] left-0 z-50 flex w-80 max-w-[calc(100vw-2rem)] flex-col overflow-hidden p-1.5 shadow-[0_12px_40px_-12px_rgba(0,0,0,0.6)]"
+          className={cn(
+            "panel absolute bottom-[calc(100%+0.5rem)] left-0 z-50 flex w-80 max-w-[calc(100vw-2rem)] flex-col overflow-hidden p-1.5 shadow-[0_12px_40px_-12px_rgba(0,0,0,0.6)]",
+            open ? "animate-rise" : "animate-fall",
+          )}
         >
           <div className="relative px-1 pb-1.5">
             <Search
@@ -239,7 +244,7 @@ function ModelSection({
             aria-checked={active}
             onClick={() => onSelect(m.id)}
             className={cn(
-              "flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left transition-colors outline-none hover:bg-surface-elevated focus-visible:bg-surface-elevated",
+              "flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left transition-colors duration-fast ease-hugo outline-none hover:bg-surface-elevated focus-visible:bg-surface-elevated",
               active && "bg-surface-elevated/60",
             )}
           >
