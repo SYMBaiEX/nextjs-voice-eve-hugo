@@ -146,7 +146,7 @@ export function useHugoRealtime(
     sessionConfig,
     onError: (e: Error) => {
       setError(e.message);
-      if (!reducedMotion) playErrorChime();
+      if (!reducedMotion) void playErrorChime();
       // Best-effort — a realtime error is otherwise only visible as a client
       // banner. Never blocks or throws; the user-facing error is already set.
       if (session) {
@@ -237,7 +237,12 @@ export function useHugoRealtime(
     setError(null);
     try {
       await rawConnect();
-      if (!reducedMotion) playConnectChime();
+      // Await, not fire-and-forget: the caller opens the mic right after this
+      // resolves, and the chime must be fully silent by then (see
+      // chimes.ts's playConnectChime doc — this was a real bug, not
+      // theoretical: the tail of the chime bled into the mic and the
+      // realtime API hallucinated a transcript from it).
+      if (!reducedMotion) await playConnectChime();
     } catch (e) {
       const message = e instanceof Error ? e.message : "Failed to connect";
       setError(message);
@@ -266,10 +271,12 @@ export function useHugoRealtime(
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       micStreamRef.current = stream;
+      // Await the blip BEFORE actually starting capture — same mic-bleed
+      // hazard as the connect chime.
+      if (!reducedMotion) await playMicToggleBlip(true);
       startAudioCapture(stream);
       // Tap the same stream for amplitude analysis (orb reactivity).
       setupMicAnalyser(stream);
-      if (!reducedMotion) playMicToggleBlip(true);
     } catch {
       setError("Microphone permission is required to talk to Hugo.");
     }
@@ -384,7 +391,7 @@ export function useHugoRealtime(
   }, [status, error, session, isPlaying, isCapturing]);
 
   const interrupt = useCallback(() => {
-    if (!reducedMotion) playBargeInBlip();
+    if (!reducedMotion) void playBargeInBlip();
     cancelResponse();
   }, [cancelResponse, reducedMotion]);
 
