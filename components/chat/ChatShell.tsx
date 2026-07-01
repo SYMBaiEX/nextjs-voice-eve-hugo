@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useMutation } from "convex/react";
 import { Menu } from "lucide-react";
@@ -31,6 +31,35 @@ export function ChatShell({ collapsedInitial }: { collapsedInitial: boolean }) {
   const [creating, setCreating] = useState(false);
   const createConversation = useMutation(api.conversations.create);
 
+  // The React key that decides whether <HugoSurface> REMOUNTS. It must change
+  // on a genuine conversation switch (to reset useChat + the voice session) but
+  // NOT when a fresh surface adopts its own server-created id — remounting then
+  // tears down the in-flight voice/text session (the "click orb → starts, then
+  // cancels; second click works" bug). `activeId` can't drive the key directly:
+  // Next.js 16 syncs `history.replaceState` into `useSearchParams`, so adopting
+  // an id flips `activeId` and would remount. We track the id the surface
+  // adopted itself and suppress exactly that transition.
+  const adoptedRef = useRef<string | null>(null);
+  const [surfaceKey, setSurfaceKey] = useState<string>(activeId ?? "new");
+  useEffect(() => {
+    if (activeId && activeId === adoptedRef.current) {
+      // Consume the marker (one-shot) so a later real navigation back to this
+      // same conversation still remounts as expected.
+      adoptedRef.current = null;
+      return;
+    }
+    const sync = () => setSurfaceKey(activeId ?? "new");
+    sync();
+  }, [activeId]);
+
+  // What conversation the surface actually loads/binds to. Kept in lockstep
+  // with `surfaceKey` (NOT the raw `activeId`) so a self-adopted id doesn't
+  // flow back in as a prop change — that would re-trigger the surface's own
+  // history-load gate + inner remount and tear down the live session, the same
+  // way the key would. A fresh ("new") surface stays unbound even after it
+  // adopts its id into the URL; only a real switch/reload binds a concrete id.
+  const surfaceConversationId = surfaceKey === "new" ? undefined : surfaceKey;
+
   useEffect(() => {
     if (!isSigningOut && !isAuthLoading && !isAuthenticated) {
       router.replace("/sign-in");
@@ -53,9 +82,11 @@ export function ChatShell({ collapsedInitial }: { collapsedInitial: boolean }) {
   );
 
   // Adopt a server-created conversation id without remounting the surface:
-  // update the URL in place (shareable + reload-safe) but don't drive the React
-  // key off it, so an in-flight stream/voice session isn't interrupted.
+  // update the URL in place (shareable + reload-safe) but keep the surface's
+  // key stable, so an in-flight stream/voice session isn't interrupted. The
+  // marker tells the key-sync effect above this `activeId` change is ours.
   const adoptConversationId = useCallback((id: string) => {
+    adoptedRef.current = id;
     if (typeof window === "undefined") return;
     if (new URLSearchParams(window.location.search).get("c") === id) return;
     window.history.replaceState(null, "", `/chat?c=${id}`);
@@ -122,8 +153,8 @@ export function ChatShell({ collapsedInitial }: { collapsedInitial: boolean }) {
         <div className="relative min-h-0 flex-1 overflow-hidden">
           <div className="bg-grid bg-grid-fade pointer-events-none absolute inset-0 -z-10 opacity-40" />
           <HugoSurface
-            key={activeId ?? "new"}
-            conversationId={activeId}
+            key={surfaceKey}
+            conversationId={surfaceConversationId}
             onConversationId={adoptConversationId}
             className="h-full"
           />
