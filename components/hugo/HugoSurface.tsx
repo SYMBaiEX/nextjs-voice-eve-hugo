@@ -22,7 +22,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { api } from "@/convex/_generated/api";
-import type { Id } from "@/convex/_generated/dataModel";
+import type { Doc, Id } from "@/convex/_generated/dataModel";
 import {
   useHugoRealtime,
   type HugoRealtimeSession,
@@ -224,6 +224,23 @@ function HugoSurfaceInner({
     return running?.toolName ?? null;
   }, [recentToolCalls, activeConversationId]);
 
+  // Full tool-call history for THIS conversation → collapsible pills under the
+  // assistant turn that ran them. The Convex ledger is the one source uniform
+  // across voice/BYOK/Eve; `messages.list` supplies the assistant turns'
+  // authoritative timestamps so calls can be associated to the right turn.
+  const conversationToolCalls = useQuery(
+    api.toolCalls.listForConversation,
+    canRunProtectedQueries && activeConversationId
+      ? { conversationId: activeConversationId as Id<"conversations"> }
+      : "skip",
+  );
+  const conversationMessages = useQuery(
+    api.messages.list,
+    canRunProtectedQueries && activeConversationId
+      ? { conversationId: activeConversationId as Id<"conversations">, limit: 100 }
+      : "skip",
+  );
+
   // Most recent active conversation — offers a "Continue with Hugo" affordance
   // on a fresh landing instead of starting from zero every time.
   const recentConversations = useQuery(
@@ -361,6 +378,43 @@ function HugoSurfaceInner({
     () => [...(messages as TranscriptMessage[]), ...liveVoiceOverlay],
     [messages, liveVoiceOverlay],
   );
+
+  // Bucket each ledger tool-call under the assistant turn it belongs to. With
+  // no message↔toolCall foreign key we associate by time: a call attaches to
+  // the first persisted assistant message whose createdAt is at/after the
+  // call's startedAt (the answer produced once the tool returned). Calls newer
+  // than every persisted assistant message — the in-flight turn — attach to
+  // the last assistant turn on screen. Keyed by transcript turn id.
+  const toolCallsByTurnId = useMemo(() => {
+    const map = new Map<string, Doc<"toolCalls">[]>();
+    if (!conversationToolCalls?.length) return map;
+
+    const assistantTurnIds = transcript
+      .filter((m) => m.role === "assistant")
+      .map((m) => m.id)
+      .filter((id): id is string => typeof id === "string");
+    if (assistantTurnIds.length === 0) return map;
+    const lastTurnId = assistantTurnIds[assistantTurnIds.length - 1];
+    const onScreen = new Set(assistantTurnIds);
+
+    const assistantRows = (conversationMessages ?? [])
+      .filter((m) => m.role === "assistant")
+      .map((m) => ({ id: m._id as string, createdAt: m.createdAt }))
+      .sort((a, b) => a.createdAt - b.createdAt);
+
+    const push = (turnId: string, call: Doc<"toolCalls">) => {
+      const arr = map.get(turnId);
+      if (arr) arr.push(call);
+      else map.set(turnId, [call]);
+    };
+
+    for (const call of conversationToolCalls) {
+      const match = assistantRows.find((r) => r.createdAt >= call.startedAt);
+      if (match && onScreen.has(match.id)) push(match.id, call);
+      else push(lastTurnId, call);
+    }
+    return map;
+  }, [conversationToolCalls, conversationMessages, transcript]);
 
   // ── Voice start / connect / end (lifted from HugoVoicePanel) ──
   const startVoice = useCallback(async () => {
@@ -603,6 +657,7 @@ function HugoSurfaceInner({
                 messages={transcript}
                 fill
                 anchor="bottom"
+                toolCallsByTurnId={toolCallsByTurnId}
                 className="pt-[19rem] pb-2"
               />
             </div>
@@ -618,7 +673,11 @@ function HugoSurfaceInner({
             }}
           >
             <div className="mx-auto max-w-3xl pb-4 pt-10">
-              <HugoTranscript messages={transcript} fill />
+              <HugoTranscript
+                messages={transcript}
+                fill
+                toolCallsByTurnId={toolCallsByTurnId}
+              />
             </div>
           </div>
         )}

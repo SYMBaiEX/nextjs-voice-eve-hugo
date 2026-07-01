@@ -71,6 +71,25 @@ export const listOwn = query({
   },
 });
 
+/** Current user's tool calls for one conversation, oldest first (for the
+ *  transcript's collapsible tool-call pills — same ledger every runtime
+ *  writes to, so voice/BYOK/Eve turns all render identically). */
+export const listForConversation = query({
+  args: { conversationId: v.id("conversations") },
+  handler: async (ctx, { conversationId }) => {
+    const user = await requireUser(ctx);
+    const rows = await ctx.db
+      .query("toolCalls")
+      .withIndex("by_conversation", (q) =>
+        q.eq("conversationId", conversationId),
+      )
+      .filter((q) => q.eq(q.field("userId"), user._id))
+      .order("asc")
+      .take(100);
+    return rows;
+  },
+});
+
 // ---- Admin ----------------------------------------------------------------
 
 /** Admin: the pending tool-approval queue. */

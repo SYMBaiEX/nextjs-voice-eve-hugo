@@ -1,7 +1,9 @@
 "use client";
 
 import { useEffect, useMemo, useRef } from "react";
+import type { Doc } from "@/convex/_generated/dataModel";
 import { MarkdownContent } from "@/components/hugo/MarkdownContent";
+import { ToolCallPills } from "@/components/hugo/ToolCallPills";
 import { cn } from "@/lib/utils";
 
 /**
@@ -68,6 +70,7 @@ export function HugoTranscript({
   messages,
   fill = false,
   anchor = "top",
+  toolCallsByTurnId,
   className,
 }: {
   messages: readonly TranscriptMessage[];
@@ -78,6 +81,11 @@ export function HugoTranscript({
    *  lets it grow upward — used in voice mode so turns hug the input and fade
    *  up behind the hero orb instead of stacking over it. */
   anchor?: "top" | "bottom";
+  /** Optional per-turn tool-call rows (keyed by turn id) → collapsible pills
+   *  above the assistant's answer. Sourced from the Convex `toolCalls` ledger
+   *  by the caller so it's uniform across voice/BYOK/Eve; absent for surfaces
+   *  that don't wire it (e.g. the admin viewer). */
+  toolCallsByTurnId?: Map<string, Doc<"toolCalls">[]>;
   className?: string;
 }) {
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -140,6 +148,9 @@ export function HugoTranscript({
       {turns.map((turn) => {
         const isUser = turn.role === "user";
         const isAssistant = turn.role === "assistant";
+        const toolCalls = isAssistant
+          ? toolCallsByTurnId?.get(turn.id)
+          : undefined;
         return (
           <div
             key={turn.id}
@@ -170,6 +181,10 @@ export function HugoTranscript({
                   </span>
                 )}
               </div>
+              {/* Tools Hugo ran for this turn, before the answer bubble. */}
+              {toolCalls && toolCalls.length > 0 && (
+                <ToolCallPills calls={toolCalls} />
+              )}
               <div
                 className={cn(
                   "rounded-lg border px-3.5 py-2.5 text-sm leading-relaxed break-words",
