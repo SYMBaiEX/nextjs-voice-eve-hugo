@@ -496,7 +496,11 @@ export function HugoOrb({
           }),
         );
         if (scanA.length) track(animate(scanA, { opacity: 0.9, duration: 500 }));
-        // Micro energy jitter via createTimer.
+        // Micro energy jitter via createTimer — amplitude grows the longer
+        // Hugo has been thinking (capped), so a quick answer stays subtle
+        // while a longer one visibly builds energy instead of looping
+        // identically forever.
+        const thinkingEnteredAt = Date.now();
         track(
           createTimer({
             frameRate: 24,
@@ -504,9 +508,11 @@ export function HugoOrb({
             onUpdate: () => {
               const el = coreEl;
               if (!el) return;
+              const elapsedS = (Date.now() - thinkingEnteredAt) / 1000;
+              const amplitude = Math.min(1.4 + elapsedS * 0.3, 3.4);
               utils.set(el, {
-                translateX: utils.random(-1.4, 1.4),
-                translateY: utils.random(-1.4, 1.4),
+                translateX: utils.random(-amplitude, amplitude),
+                translateY: utils.random(-amplitude, amplitude),
               });
             },
           }),
@@ -531,13 +537,21 @@ export function HugoOrb({
       }
 
       case "interrupted": {
-        // Quick ripple collapse → single expanding ring + magenta flash → settle.
+        // Sharp flinch-and-recover → single fast expanding ring → settle. A
+        // touch snappier than a generic state transition (shorter duration,
+        // a small overshoot past rest) so barge-in reads as distinctly abrupt.
         const tl = createTimeline();
-        if (coreEl) tl.add(coreEl, { scale: [1, 0.86, 1], duration: 600, ease: "out(3)" }, 0);
+        if (coreEl) {
+          tl.add(
+            coreEl,
+            { scale: [1, 0.82, 1.05, 1], duration: 480, ease: "out(4)" },
+            0,
+          );
+        }
         if (pulseSingle.length) {
           tl.add(
             pulseSingle,
-            { scale: [0.8, 2.2], opacity: [0.9, 0], duration: 750, ease: "out(2)" },
+            { scale: [0.75, 2.1], opacity: [1, 0], duration: 600, ease: "out(3)" },
             0,
           );
         }
@@ -631,8 +645,16 @@ export function HugoOrb({
       const target = utils.clamp(audioRef.current || 0, 0, 1);
       // Speaking has no exposed output amplitude → add a gentle synthesized
       // rhythm so the orb still feels alive; listening uses the raw mic level.
+      // Layered incommensurate sines (not one clean wave) so the waveform
+      // doesn't read as a perfect metronome over a longer response.
       const driven = speaking
-        ? Math.max(target, 0.35 + 0.3 * (0.5 + 0.5 * Math.sin(performance.now() / 140)))
+        ? Math.max(
+            target,
+            0.35 +
+              0.22 * (0.5 + 0.5 * Math.sin(performance.now() / 140)) +
+              0.06 * Math.sin(performance.now() / 63 + 1.1) +
+              0.03 * Math.sin(performance.now() / 310 + 0.4),
+          )
         : target;
       smooth = utils.lerp(smooth, driven, 0.18);
 

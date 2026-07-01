@@ -5,6 +5,13 @@ import { experimental_useRealtime as useRealtime } from "@ai-sdk/react";
 import { gateway } from "@ai-sdk/gateway";
 import { utils } from "animejs";
 import type { HugoOrbState } from "@/lib/types";
+import { useReducedMotion } from "@/components/motion/useReducedMotion";
+import {
+  playBargeInBlip,
+  playConnectChime,
+  playErrorChime,
+  playMicToggleBlip,
+} from "@/lib/audio/chimes";
 
 /**
  * useHugoRealtime — the realtime voice core (PRD 5.4).
@@ -67,6 +74,9 @@ export function useHugoRealtime(
   // so a provider-side failure right after a tool call is diagnosable
   // server-side instead of only visible as a client error banner.
   const lastToolNameRef = useRef<string | null>(null);
+  // Same flag HugoOrb.tsx gates its own motion on — a user who's asked for
+  // less motion shouldn't get new chimes either.
+  const reducedMotion = useReducedMotion();
 
   // --- Audio-reactive analyser plumbing ---------------------------------
   const audioContextRef = useRef<AudioContext | null>(null);
@@ -136,6 +146,7 @@ export function useHugoRealtime(
     sessionConfig,
     onError: (e: Error) => {
       setError(e.message);
+      if (!reducedMotion) playErrorChime();
       // Best-effort — a realtime error is otherwise only visible as a client
       // banner. Never blocks or throws; the user-facing error is already set.
       if (session) {
@@ -226,12 +237,13 @@ export function useHugoRealtime(
     setError(null);
     try {
       await rawConnect();
+      if (!reducedMotion) playConnectChime();
     } catch (e) {
       const message = e instanceof Error ? e.message : "Failed to connect";
       setError(message);
       throw e;
     }
-  }, [rawConnect]);
+  }, [rawConnect, reducedMotion]);
 
   const stopMic = useCallback(() => {
     stopAudioCapture();
@@ -248,6 +260,7 @@ export function useHugoRealtime(
   const toggleMic = useCallback(async () => {
     if (isCapturing) {
       stopMic();
+      if (!reducedMotion) playMicToggleBlip(false);
       return;
     }
     try {
@@ -256,10 +269,11 @@ export function useHugoRealtime(
       startAudioCapture(stream);
       // Tap the same stream for amplitude analysis (orb reactivity).
       setupMicAnalyser(stream);
+      if (!reducedMotion) playMicToggleBlip(true);
     } catch {
       setError("Microphone permission is required to talk to Hugo.");
     }
-  }, [isCapturing, startAudioCapture, stopMic, setupMicAnalyser]);
+  }, [isCapturing, startAudioCapture, stopMic, setupMicAnalyser, reducedMotion]);
 
   // Clean up any open mic stream + analyser on unmount ONLY.
   //
@@ -369,6 +383,11 @@ export function useHugoRealtime(
     return "idle";
   }, [status, error, session, isPlaying, isCapturing]);
 
+  const interrupt = useCallback(() => {
+    if (!reducedMotion) playBargeInBlip();
+    cancelResponse();
+  }, [cancelResponse, reducedMotion]);
+
   return {
     orbState,
     status,
@@ -380,7 +399,7 @@ export function useHugoRealtime(
     connect,
     disconnect,
     toggleMic,
-    interrupt: cancelResponse,
+    interrupt,
     sendText: sendTextMessage,
   };
 }
