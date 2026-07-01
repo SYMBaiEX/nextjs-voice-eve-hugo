@@ -85,6 +85,20 @@ export function redact(value: unknown): unknown {
   return out;
 }
 
+/** Hard cap on any outbound tool fetch (Open-Meteo, TinyFish). Voice turns in
+ *  particular need a bounded worst case — a hanging external call would
+ *  otherwise stall the realtime turn indefinitely instead of failing fast
+ *  into the tool's normal `{ error }` shape. */
+const TOOL_FETCH_TIMEOUT_MS = 8_000;
+
+/** Keep tool output text short and voice-friendly — a wall of raw search
+ *  snippets is bad UX in any modality, and realtime (speech) turns in
+ *  particular are far more sensitive to large/complex function outputs than
+ *  a text chat turn is. */
+function truncate(text: string, maxLength: number): string {
+  return text.length > maxLength ? `${text.slice(0, maxLength - 1)}…` : text;
+}
+
 /** WMO weather-interpretation codes (the standard table Open-Meteo returns). */
 const WMO_CODES: Record<number, string> = {
   0: "Clear sky",
@@ -143,7 +157,9 @@ async function getWeatherForLocation(
   geoUrl.searchParams.set("language", "en");
   geoUrl.searchParams.set("format", "json");
 
-  const geoRes = await fetch(geoUrl).catch(() => null);
+  const geoRes = await fetch(geoUrl, { signal: AbortSignal.timeout(TOOL_FETCH_TIMEOUT_MS) }).catch(
+    () => null,
+  );
   const geo = await geoRes?.json().catch(() => null);
   const place = geo?.results?.[0] as
     | { name?: string; country_code?: string; latitude?: number; longitude?: number }
@@ -165,7 +181,9 @@ async function getWeatherForLocation(
     unit === "fahrenheit" ? "mph" : "kmh",
   );
 
-  const wxRes = await fetch(forecastUrl).catch(() => null);
+  const wxRes = await fetch(forecastUrl, {
+    signal: AbortSignal.timeout(TOOL_FETCH_TIMEOUT_MS),
+  }).catch(() => null);
   const wx = await wxRes?.json().catch(() => null);
   const current = wx?.current as
     | {
@@ -236,9 +254,10 @@ async function searchTheWeb(
   url.searchParams.set("query", query);
   url.searchParams.set("domain_type", domainType);
 
-  const res = await fetch(url, { headers: { "X-API-Key": apiKey } }).catch(
-    () => null,
-  );
+  const res = await fetch(url, {
+    headers: { "X-API-Key": apiKey },
+    signal: AbortSignal.timeout(TOOL_FETCH_TIMEOUT_MS),
+  }).catch(() => null);
   if (!res?.ok) {
     return { error: "The web search provider is unavailable right now." };
   }
@@ -250,9 +269,9 @@ async function searchTheWeb(
   return {
     query,
     results: results.slice(0, limit).map((r) => ({
-      title: r.title ?? "",
+      title: truncate(r.title ?? "", 120),
       url: r.url ?? "",
-      snippet: r.snippet ?? "",
+      snippet: truncate(r.snippet ?? "", 200),
       siteName: r.site_name ?? "",
     })),
     totalResults: data?.total_results ?? results.length,
@@ -479,11 +498,11 @@ export const TOOL_DEFS = {
 
   searchWeb: toolDef({
     description:
-      "Search the web for current information — news, facts, or research not in your training data.",
+      "Search the web for current information — news, facts, or research not in your training data. Keep the spoken/written summary brief; don't read out every result verbatim.",
     inputSchema: z.object({
       query: z.string().min(1).max(400),
       domainType: z.enum(["web", "news", "research_paper"]).default("web"),
-      limit: z.number().int().min(1).max(10).default(5),
+      limit: z.number().int().min(1).max(10).default(4),
     }),
     logic: async (ctx, { query, domainType, limit }) => {
       return await searchTheWeb(ctx.token, query, domainType, limit);
