@@ -7,10 +7,19 @@ import {
   useRef,
   useState,
 } from "react";
+import { useRouter } from "next/navigation";
 import { useMutation, useQuery } from "convex/react";
 import { useChat } from "@ai-sdk/react";
 import { DefaultChatTransport, type UIMessage } from "ai";
-import { Mic, PhoneOff, RotateCcw, SendHorizontal, Square, X } from "lucide-react";
+import {
+  MessageSquare,
+  Mic,
+  PhoneOff,
+  RotateCcw,
+  SendHorizontal,
+  Square,
+  X,
+} from "lucide-react";
 import { toast } from "sonner";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
@@ -174,6 +183,7 @@ function HugoSurfaceInner({
 }) {
   const [input, setInput] = useState("");
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const router = useRouter();
   const [activeConversationId, setActiveConversationId] = useState<
     string | undefined
   >(conversationId);
@@ -212,6 +222,18 @@ function HugoSurfaceInner({
     );
     return running?.toolName ?? null;
   }, [recentToolCalls, activeConversationId]);
+
+  // Most recent active conversation — offers a "Continue with Hugo" affordance
+  // on a fresh landing instead of starting from zero every time.
+  const recentConversations = useQuery(
+    api.conversations.list,
+    canRunProtectedQueries && !activeConversationId
+      ? { status: "active", limit: 1 }
+      : "skip",
+  );
+  const continueConversation = activeConversationId
+    ? undefined
+    : recentConversations?.[0];
 
   // ── Voice session lifecycle (lifted from HugoVoicePanel) ──
   const [session, setSession] = useState<HugoRealtimeSession | null>(null);
@@ -528,6 +550,20 @@ function HugoSurfaceInner({
               <p className="mt-1.5 text-sm text-text-muted">
                 Ask a question, talk it through, or pick one to start.
               </p>
+              {continueConversation && (
+                <button
+                  type="button"
+                  onClick={() =>
+                    router.push(`/chat?c=${continueConversation._id}`)
+                  }
+                  className="mt-4 inline-flex max-w-full items-center gap-1.5 rounded-full border border-border bg-surface/60 px-3.5 py-1.5 text-xs text-text-secondary transition-colors hover:border-hugo-cyan/40 hover:text-text-primary"
+                >
+                  <MessageSquare aria-hidden className="size-3.5 shrink-0" />
+                  <span className="truncate">
+                    Continue with Hugo — {continueConversation.title}
+                  </span>
+                </button>
+              )}
             </div>
           </div>
         ) : voiceActive ? (
