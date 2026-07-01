@@ -431,17 +431,16 @@ function HugoSurfaceInner({
   }, [rt.error, endVoice]);
 
   // ── Composer actions ──
+  // Text has no BYOK gate: a keyless (or admin) user's turn runs on Eve, the
+  // real agent, with the platform's own model — only voice still needs BYOK
+  // (Eve has no realtime path, so voice must go through the user's own key).
   const submitText = useCallback(() => {
     const text = input.trim();
     if (!text || isStreaming) return;
-    if (keyless) {
-      nudgeForKey();
-      return;
-    }
     setInput("");
     void sendMessage({ text }, { body: { conversationId: activeConversationId } });
     textareaRef.current?.focus();
-  }, [input, isStreaming, keyless, nudgeForKey, sendMessage, activeConversationId]);
+  }, [input, isStreaming, sendMessage, activeConversationId]);
 
   const onKeyDown = useCallback(
     (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -466,12 +465,8 @@ function HugoSurfaceInner({
   const canRegenerate =
     !isStreaming && !voiceActive && lastRole === "assistant";
   const handleRegenerate = useCallback(() => {
-    if (keyless) {
-      nudgeForKey();
-      return;
-    }
     void regenerate();
-  }, [keyless, nudgeForKey, regenerate]);
+  }, [regenerate]);
 
   return (
     <div className={cn("relative flex h-full flex-col", className)}>

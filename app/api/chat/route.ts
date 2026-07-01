@@ -16,11 +16,14 @@ import {
   buildHugoSystemPrompt,
   buildHugoTools,
   getHugoTextCallSettings,
+  getTextModel,
+  isAiConfigured,
   resolveUserModel,
 } from "@/lib/ai";
 import { getUserGateway } from "@/lib/user-gateway";
 import { getRuntimeConfig } from "@/lib/runtime-config";
 import { resolveTextModel } from "@/lib/model-catalog";
+import { streamEveChat } from "@/lib/eve-bridge";
 import { hugoTelemetry, track } from "@/lib/telemetry";
 import { isTextLimitReached } from "@/lib/usage";
 import { rateLimit } from "@/lib/rate-limit";
@@ -99,27 +102,6 @@ export async function POST(req: Request) {
     );
   }
 
-  // Resolve the caller's gateway (admin → server key; everyone else → BYOK).
-  const { gw, cacheKey, configured } = await getUserGateway(me, token);
-  if (!configured) {
-    return me.role === "admin"
-      ? NextResponse.json(
-          {
-            error:
-              "AI is not configured. Set AI_GATEWAY_API_KEY to chat with Hugo.",
-          },
-          { status: 503 },
-        )
-      : NextResponse.json(
-          {
-            error:
-              "Add your Vercel AI Gateway key in Settings to chat with Hugo.",
-            code: "gateway_key_required",
-          },
-          { status: 402 },
-        );
-  }
-
   // Resolve or create the conversation.
   let conversationId = incomingConversationId as Id<"conversations"> | undefined;
   const isResume = !!conversationId;
@@ -173,6 +155,92 @@ export async function POST(req: Request) {
       { conversationId, role: "user", modality: "text", content: userText },
       { token },
     ).catch(() => {});
+  }
+
+  // BYOK stays on the in-process path below (their own key + model choice).
+  // Everyone else (admin, or a non-admin without a key) runs on Eve — the
+  // real agent, tools included, on the durable runtime — since Eve's model is
+  // a single static value with no per-user override.
+  const usesEve = me.role === "admin" || !me.hasGatewayKey;
+  if (usesEve) {
+    if (!isAiConfigured()) {
+      return NextResponse.json(
+        {
+          error:
+            "AI is not configured. Set AI_GATEWAY_API_KEY to chat with Hugo.",
+        },
+        { status: 503 },
+      );
+    }
+    const convo = isResume
+      ? await fetchQuery(api.conversations.get, { conversationId }, { token }).catch(
+          () => null,
+        )
+      : null;
+    const eveStartedAt = Date.now();
+    return streamEveChat({
+      originUrl: req.url,
+      caller: { userId: me._id, role: me.role, token, conversationId },
+      userText: userText || "Continue.",
+      priorEveSession: convo?.eveSessionState,
+      headers: { "x-conversation-id": conversationId },
+      onFinish: async ({ text, usage }) => {
+        try {
+          if (text) {
+            await fetchMutation(
+              api.messages.append,
+              { conversationId, role: "assistant", modality: "text", content: text },
+              { token },
+            );
+          }
+          await fetchMutation(
+            api.usageEvents.log,
+            {
+              type: "text_message",
+              conversationId,
+              provider: "ai-gateway",
+              model: getTextModel(),
+              inputTokens: usage.inputTokens,
+              outputTokens: usage.outputTokens,
+              latencyMs: Date.now() - eveStartedAt,
+            },
+            { token },
+          );
+          track("assistant_response_completed", {
+            conversationId,
+            inputTokens: usage.inputTokens ?? null,
+            latencyMs: Date.now() - eveStartedAt,
+            model: getTextModel(),
+            outputTokens: usage.outputTokens ?? null,
+            userId: me._id,
+          });
+        } catch {
+          /* persistence is best-effort; the stream already succeeded */
+        }
+      },
+      onError: async (message) => {
+        track("assistant_response_failed", {
+          conversationId,
+          error: message,
+          model: getTextModel(),
+          userId: me._id,
+        });
+      },
+    });
+  }
+
+  // BYOK path (a non-admin with their own key): resolve their gateway. A
+  // stored-but-undecryptable key (e.g. KEY_ENCRYPTION_SECRET rotated) still
+  // 402s here even though `usesEve` was false, rather than silently failing.
+  const { gw, cacheKey, configured } = await getUserGateway(me, token);
+  if (!configured) {
+    return NextResponse.json(
+      {
+        error: "Add your Vercel AI Gateway key in Settings to chat with Hugo.",
+        code: "gateway_key_required",
+      },
+      { status: 402 },
+    );
   }
 
   // Per-user memory + identity for the system prompt.

@@ -10,14 +10,18 @@ import { GatewayKeyDialog } from "@/components/chat/GatewayKeyDialog";
 import { AI_GATEWAY_KEYS_URL, OPEN_GATEWAY_KEY_EVENT } from "@/lib/constants";
 
 /**
- * GatewayKeyBanner — the BYOK onboarding nudge (soft gate).
+ * GatewayKeyBanner — the BYOK onboarding nudge (soft gate for VOICE only).
  *
- * Shown only to non-admins who haven't set their own AI Gateway key. Admins use
- * the server key, so they never see it. Dismiss is in-memory (the banner
- * reappears on refresh until a key is set). It also hosts the shared
- * GatewayKeyDialog and opens it on the `OPEN_GATEWAY_KEY_EVENT` window event, so
- * the composer's keyless nudge can pop the same dialog. Once a key is saved,
- * Convex reactivity flips `hasGatewayKey` and the whole thing disappears.
+ * Text chat has no gate: a keyless user's text runs on the Eve runtime with
+ * the platform's own model. Only realtime voice actually requires the user's
+ * own AI Gateway key (Eve has no realtime API, so voice can't route around
+ * BYOK the way text now does). Shown only to non-admins who haven't set their
+ * own key. Admins use the server key, so they never see it. Dismiss is
+ * in-memory (the banner reappears on refresh until a key is set). It also
+ * hosts the shared GatewayKeyDialog and opens it on the
+ * `OPEN_GATEWAY_KEY_EVENT` window event, so the composer's keyless voice nudge
+ * can pop the same dialog. Once a key is saved, Convex reactivity flips
+ * `hasGatewayKey` and the whole thing disappears.
  */
 export function GatewayKeyBanner() {
   const { canRunProtectedQueries } = useAuthTransition();
@@ -49,7 +53,7 @@ export function GatewayKeyBanner() {
             <span className="font-medium text-text-primary">
               Bring your own AI Gateway key
             </span>{" "}
-            to chat and talk with Hugo — your models and usage stay yours.
+            to talk with Hugo over voice — your models and usage stay yours.
           </p>
           <a
             href={AI_GATEWAY_KEYS_URL}
