@@ -28,6 +28,7 @@ import {
 } from "@/lib/constants";
 import { GatewayKeyDialog } from "@/components/chat/GatewayKeyDialog";
 import { TinyfishKeyDialog } from "@/components/settings/TinyfishKeyDialog";
+import { OrbSlot } from "@/components/hugo/OrbSlot";
 import { ThemeToggle } from "@/components/layout/ThemeToggle";
 import {
   Card,
@@ -293,13 +294,18 @@ export function SettingsClient() {
         </Link>
       </div>
 
-      <div className="flex flex-col gap-1">
-        <h1 className="text-lg font-semibold tracking-tight text-text-primary">
-          Settings
-        </h1>
-        <p className="text-sm text-text-secondary">
-          Your profile, voice preferences, usage, and what Hugo remembers.
-        </p>
+      <div className="flex items-center justify-between gap-4">
+        <div className="flex flex-col gap-1">
+          <h1 className="text-lg font-semibold tracking-tight text-text-primary">
+            Settings
+          </h1>
+          <p className="text-sm text-text-secondary">
+            Your profile, voice preferences, usage, and what Hugo remembers.
+          </p>
+        </div>
+        {/* Ambient presence — the orb stays visible outside of chat too,
+            instead of only appearing during an active session. */}
+        <OrbSlot size={44} className="hidden shrink-0 sm:block" />
       </div>
 
       {/* AI Gateway key (BYOK) — surfaced first so users can connect their key */}

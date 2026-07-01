@@ -36,6 +36,42 @@ export interface HugoAmbientFieldProps {
 
 const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
 
+/** Dawn/noon/dusk/night RGB anchors (0..1), interpolated by local hour. Purely
+ *  cosmetic ambiance — no server involvement, no precision needed. */
+const TIME_OF_DAY_STOPS: [number, [number, number, number]][] = [
+  [0, [0.05, 0.08, 0.22]],
+  [6, [0.85, 0.55, 0.35]],
+  [12, [0.55, 0.75, 0.95]],
+  [18, [0.9, 0.45, 0.35]],
+  [24, [0.05, 0.08, 0.22]],
+];
+
+function timeOfDayTint(hour: number): [number, number, number] {
+  for (let i = 0; i < TIME_OF_DAY_STOPS.length - 1; i++) {
+    const [h0, c0] = TIME_OF_DAY_STOPS[i];
+    const [h1, c1] = TIME_OF_DAY_STOPS[i + 1];
+    if (hour >= h0 && hour <= h1) {
+      const t = (hour - h0) / (h1 - h0);
+      return [lerp(c0[0], c1[0], t), lerp(c0[1], c1[1], t), lerp(c0[2], c1[2], t)];
+    }
+  }
+  return TIME_OF_DAY_STOPS[0][1];
+}
+
+/** Subtly nudge a per-state color toward the time-of-day tint — the state's
+ *  own identity stays dominant, this is ambiance, not a re-theme. */
+function blendTimeOfDay(
+  base: readonly [number, number, number],
+  tint: readonly [number, number, number],
+  amount: number,
+): [number, number, number] {
+  return [
+    lerp(base[0], tint[0], amount),
+    lerp(base[1], tint[1], amount),
+    lerp(base[2], tint[2], amount),
+  ];
+}
+
 export function HugoAmbientField({
   state = "idle",
   audioLevel,
@@ -60,6 +96,24 @@ export function HugoAmbientField({
     audioRef.current =
       typeof audioLevel === "number" && Number.isFinite(audioLevel) ? audioLevel : 0;
   }, [audioLevel]);
+
+  // Time-of-day ambient tint. Starts null (server + first client paint match,
+  // no hydration mismatch) and is set on the first client effect tick, then
+  // rechecked on a slow interval — this is ambiance, not a clock.
+  const [hourOfDay, setHourOfDay] = useState<number | null>(null);
+  const hourTintRef = useRef<[number, number, number] | null>(null);
+  useEffect(() => {
+    const update = () => {
+      const now = new Date();
+      setHourOfDay(now.getHours() + now.getMinutes() / 60);
+    };
+    update();
+    const id = setInterval(update, 10 * 60 * 1000);
+    return () => clearInterval(id);
+  }, []);
+  useEffect(() => {
+    hourTintRef.current = hourOfDay === null ? null : timeOfDayTint(hourOfDay);
+  }, [hourOfDay]);
 
   // ── GPU setup (once). Falls back to CSS on any failure. ──────────────────
   useEffect(() => {
@@ -217,10 +271,13 @@ export function HugoAmbientField({
         const renderFrame = (animated: boolean) => {
           const st = styleRef.current;
           const targetAudio = st.audioReactive ? audioRef.current : 0;
-          // Ease toward per-state targets every frame (~600ms feel).
-          sColor[0] = lerp(sColor[0], st.color[0], 0.05);
-          sColor[1] = lerp(sColor[1], st.color[1], 0.05);
-          sColor[2] = lerp(sColor[2], st.color[2], 0.05);
+          // Ease toward per-state targets every frame (~600ms feel) — nudged
+          // toward the current time-of-day tint when known.
+          const tint = hourTintRef.current;
+          const colorTarget = tint ? blendTimeOfDay(st.color, tint, 0.18) : st.color;
+          sColor[0] = lerp(sColor[0], colorTarget[0], 0.05);
+          sColor[1] = lerp(sColor[1], colorTarget[1], 0.05);
+          sColor[2] = lerp(sColor[2], colorTarget[2], 0.05);
           sGlow = lerp(sGlow, st.glow, 0.06);
           sFlow = lerp(sFlow, st.flow, 0.04);
           sAudio = lerp(sAudio, targetAudio, targetAudio > sAudio ? 0.3 : 0.12);
@@ -304,10 +361,13 @@ export function HugoAmbientField({
     };
   }, [active]);
 
-  // CSS fallback tint follows the same per-state color source as the GPU path.
+  // CSS fallback tint follows the same per-state color source as the GPU
+  // path, including the same time-of-day nudge.
   const fs = fieldStyleFor(state);
-  const rgb = `${Math.round(fs.color[0] * 255)} ${Math.round(fs.color[1] * 255)} ${Math.round(
-    fs.color[2] * 255,
+  const cssColor =
+    hourOfDay === null ? fs.color : blendTimeOfDay(fs.color, timeOfDayTint(hourOfDay), 0.18);
+  const rgb = `${Math.round(cssColor[0] * 255)} ${Math.round(cssColor[1] * 255)} ${Math.round(
+    cssColor[2] * 255,
   )}`;
   const showCss = mode !== "gpu";
 

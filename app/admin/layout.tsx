@@ -10,6 +10,7 @@ import { Badge } from "@/components/ui/badge";
 import { buttonVariants } from "@/components/ui/button-variants";
 import { Avatar } from "@/components/ui/misc";
 import { AdminNav } from "@/components/admin/AdminNav";
+import { OrbSlot } from "@/components/hugo/OrbSlot";
 
 /**
  * Admin chrome + server-side authorization (PRD 5.8 / 5.17).
@@ -45,6 +46,9 @@ export default async function AdminLayout({
             </Badge>
           </div>
           <div className="flex items-center gap-2">
+            {/* Ambient presence — the orb stays visible outside of chat too,
+                instead of only appearing during an active session. */}
+            <OrbSlot size={32} className="hidden sm:block" />
             <ThemeToggle />
             <Link
               href="/chat"
