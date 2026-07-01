@@ -78,6 +78,17 @@ export default defineSchema({
     lastMessageAt: v.number(),
     summary: v.optional(v.string()),
     tags: v.optional(v.array(v.string())),
+    // Durable Eve session cursor for the keyless/admin text path (BYOK text
+    // stays on the in-process AI SDK path and never sets this). Lets a
+    // conversation resume the SAME Eve session across turns/reloads instead
+    // of starting fresh each time.
+    eveSessionState: v.optional(
+      v.object({
+        sessionId: v.optional(v.string()),
+        continuationToken: v.optional(v.string()),
+        streamIndex: v.number(),
+      }),
+    ),
   })
     .index("by_user", ["userId"])
     .index("by_user_status", ["userId", "status"])

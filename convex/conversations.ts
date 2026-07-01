@@ -159,6 +159,27 @@ export const setSummary = mutation({
   },
 });
 
+/** Persist the durable Eve session cursor for the keyless/admin text path, so
+ *  a later turn continues the SAME Eve session instead of starting fresh. */
+export const setEveSession = mutation({
+  args: {
+    conversationId: v.id("conversations"),
+    eveSessionState: v.object({
+      sessionId: v.optional(v.string()),
+      continuationToken: v.optional(v.string()),
+      streamIndex: v.number(),
+    }),
+  },
+  handler: async (ctx, { conversationId, eveSessionState }) => {
+    const user = await requireUser(ctx);
+    const convo = await ctx.db.get(conversationId);
+    if (!convo) throw new Error("Not found");
+    assertOwnerOrAdmin(user, convo.userId);
+    await ctx.db.patch(conversationId, { eveSessionState, updatedAt: Date.now() });
+    return { ok: true };
+  },
+});
+
 // ---- Admin ----------------------------------------------------------------
 
 /** Admin: list conversations across all users with optional filters. */

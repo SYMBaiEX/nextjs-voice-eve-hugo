@@ -37,7 +37,7 @@ importers:
         version: 1.42.0(react@19.2.7)
       eve:
         specifier: ^0.17.1
-        version: 0.17.1(ai@7.0.6(zod@4.4.3))(jiti@2.7.0)(next@16.2.9(@babel/core@7.29.7)(react-dom@19.2.7(react@19.2.7))(react@19.2.7))(react@19.2.7)(vite@8.1.0(@types/node@26.0.1)(esbuild@0.27.0)(jiti@2.7.0))
+        version: 0.17.1(ai@7.0.6(zod@4.4.3))(jiti@2.7.0)(microsandbox@0.6.1)(next@16.2.9(@babel/core@7.29.7)(react-dom@19.2.7(react@19.2.7))(react@19.2.7))(react@19.2.7)(vite@8.1.0(@types/node@26.0.1)(esbuild@0.27.0)(jiti@2.7.0))
       lucide-react:
         specifier: ^1.22.0
         version: 1.22.0(react@19.2.7)
@@ -56,6 +56,9 @@ importers:
       recharts:
         specifier: ^3.9.0
         version: 3.9.0(@types/react@19.2.17)(react-dom@19.2.7(react@19.2.7))(react-is@16.13.1)(react@19.2.7)(redux@5.0.1)
+      server-only:
+        specifier: ^0.0.1
+        version: 0.0.1
       sonner:
         specifier: ^2.0.7
         version: 2.0.7(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
@@ -96,6 +99,9 @@ importers:
       eslint-config-next:
         specifier: 16.2.9
         version: 16.2.9(@typescript-eslint/parser@8.62.1(eslint@9.39.4(jiti@2.7.0))(typescript@6.0.3))(eslint@9.39.4(jiti@2.7.0))(typescript@6.0.3)
+      microsandbox:
+        specifier: ^0.6.1
+        version: 0.6.1
       tailwindcss:
         specifier: ^4
         version: 4.3.2
@@ -865,6 +871,38 @@ packages:
 
   '@standard-schema/utils@0.3.0':
     resolution: {integrity: sha512-e7Mew686owMaPJVNNLs55PUvgz371nKgwsc4vxE49zsODpJEnxgxRo2y/OKrqueavXgZNMDVj3DdHFlaSAeU8g==}
+
+  '@superradcompany/microsandbox-darwin-arm64@0.6.1':
+    resolution: {integrity: sha512-x9li7pDtdDb0gqMioucF3KBSp9CcJmSMjaLdwNu6SkzR+UmJ6hCXT2rrltz0I5v/87q6S0YuPnOpn73OwjC1fQ==}
+    engines: {node: '>= 22'}
+    cpu: [arm64]
+    os: [darwin]
+
+  '@superradcompany/microsandbox-linux-arm64-gnu@0.6.1':
+    resolution: {integrity: sha512-0SGSx47JEdF1cqVna9VNcS53Jk+LVAEnbO4v5knyc46vdol68iRYyDwXaeUTtvIpkdQtJiECyIjCllkZdd6f0g==}
+    engines: {node: '>= 22'}
+    cpu: [arm64]
+    os: [linux]
+    libc: [glibc]
+
+  '@superradcompany/microsandbox-linux-x64-gnu@0.6.1':
+    resolution: {integrity: sha512-qdXug3Zp1tTTcz4uuYKf2igWW/aFOTH+kxW180o4iUEGuUYyjSCVR/GN+Klfs6xGlP80txTr5J0uR7Nx3m1iqw==}
+    engines: {node: '>= 22'}
+    cpu: [x64]
+    os: [linux]
+    libc: [glibc]
+
+  '@superradcompany/microsandbox-win32-arm64-msvc@0.6.1':
+    resolution: {integrity: sha512-VEm1LsE3se4rCiXm0u2Y+MCTh6l0nnBMMJgMTv0Sh7neS6u/tARtl99PzTyCoV5x87yFd2nJQwfbC2VcJ8hmBQ==}
+    engines: {node: '>= 22'}
+    cpu: [arm64]
+    os: [win32]
+
+  '@superradcompany/microsandbox-win32-x64-msvc@0.6.1':
+    resolution: {integrity: sha512-zOCGPIuU7GQlbyF/VWgvQg/lfKn7sdFb23azLEtRyVi2KrblQ7rFnH+rGPQEyyerY1skn+nXHyHStCwdT7yspA==}
+    engines: {node: '>= 22'}
+    cpu: [x64]
+    os: [win32]
 
   '@swc/helpers@0.5.15':
     resolution: {integrity: sha512-JQ5TuMi45Owi4/BIMAJBoSQoOJu12oOk/gADqlcUL9JEdHB8vyjUSsxqeNXnmXHjYKMi2WcYtezGEEhqUI/E2g==}
@@ -2339,6 +2377,11 @@ packages:
     resolution: {integrity: sha512-PXwfBhYu0hBCPw8Dn0E+WDYb7af3dSLVWKi3HGv84IdF4TyFoC0ysxFd0Goxw7nSv4T/PzEJQxsYsEiFCKo2BA==}
     engines: {node: '>=8.6'}
 
+  microsandbox@0.6.1:
+    resolution: {integrity: sha512-+q4ZpTXQGTQmSQe3LXE9lB42/1dLEGHoqbzMhB3FwxfHchKXJSqQnEh3tycRp+3MvOQkmOuQb7Hwr/BJoy0ziQ==}
+    engines: {node: '>= 22'}
+    hasBin: true
+
   minimatch@10.2.5:
     resolution: {integrity: sha512-MULkVLfKGYDFYejP07QOurDLLQpcjk7Fw+7jXS2R2czRQzR56yHRveU5NDJEOviH+hETZKSkIk5c+T23GjFUMg==}
     engines: {node: 18 || 20 || >=22}
@@ -3758,6 +3801,21 @@ snapshots:
 
   '@standard-schema/utils@0.3.0': {}
 
+  '@superradcompany/microsandbox-darwin-arm64@0.6.1':
+    optional: true
+
+  '@superradcompany/microsandbox-linux-arm64-gnu@0.6.1':
+    optional: true
+
+  '@superradcompany/microsandbox-linux-x64-gnu@0.6.1':
+    optional: true
+
+  '@superradcompany/microsandbox-win32-arm64-msvc@0.6.1':
+    optional: true
+
+  '@superradcompany/microsandbox-win32-x64-msvc@0.6.1':
+    optional: true
+
   '@swc/helpers@0.5.15':
     dependencies:
       tslib: 2.8.1
@@ -4781,11 +4839,12 @@ snapshots:
 
   esutils@2.0.3: {}
 
-  eve@0.17.1(ai@7.0.6(zod@4.4.3))(jiti@2.7.0)(next@16.2.9(@babel/core@7.29.7)(react-dom@19.2.7(react@19.2.7))(react@19.2.7))(react@19.2.7)(vite@8.1.0(@types/node@26.0.1)(esbuild@0.27.0)(jiti@2.7.0)):
+  eve@0.17.1(ai@7.0.6(zod@4.4.3))(jiti@2.7.0)(microsandbox@0.6.1)(next@16.2.9(@babel/core@7.29.7)(react-dom@19.2.7(react@19.2.7))(react@19.2.7))(react@19.2.7)(vite@8.1.0(@types/node@26.0.1)(esbuild@0.27.0)(jiti@2.7.0)):
     dependencies:
       ai: 7.0.6(zod@4.4.3)
       nitro: 3.0.260610-beta(jiti@2.7.0)(vite@8.1.0(@types/node@26.0.1)(esbuild@0.27.0)(jiti@2.7.0))
     optionalDependencies:
+      microsandbox: 0.6.1
       next: 16.2.9(@babel/core@7.29.7)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
       react: 19.2.7
       vite: 8.1.0(@types/node@26.0.1)(esbuild@0.27.0)(jiti@2.7.0)
@@ -5283,6 +5342,14 @@ snapshots:
     dependencies:
       braces: 3.0.3
       picomatch: 2.3.2
+
+  microsandbox@0.6.1:
+    optionalDependencies:
+      '@superradcompany/microsandbox-darwin-arm64': 0.6.1
+      '@superradcompany/microsandbox-linux-arm64-gnu': 0.6.1
+      '@superradcompany/microsandbox-linux-x64-gnu': 0.6.1
+      '@superradcompany/microsandbox-win32-arm64-msvc': 0.6.1
+      '@superradcompany/microsandbox-win32-x64-msvc': 0.6.1
 
   minimatch@10.2.5:
     dependencies:

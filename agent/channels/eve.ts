@@ -1,19 +1,50 @@
 import { eveChannel } from "eve/channels/eve";
-import { none } from "eve/channels/auth";
+import { localDev, vercelOidc } from "eve/channels/auth";
 
 /**
- * Eve HTTP channel for the Hugo Labs showcase agent.
+ * Eve HTTP channel for Hugo's text-chat runtime.
  *
- * Access is gated UPSTREAM by the Next.js middleware (`proxy.ts`), which
- * requires an authenticated app session before any `/eve/v1/*` request is
- * rewritten to this runtime. The channel itself therefore uses `none()` so the
- * already-authorized, same-origin proxied request is accepted in production
- * (the default `vercelOidc()/localDev()` policy would 401 a browser user).
+ * **Route-level auth** (`vercelOidc()`, `localDev()`) admits only trusted
+ * server callers — the same Vercel project (production) or localhost (dev).
+ * The browser never talks to Eve directly; every request comes from Hugo's
+ * own server-to-server bridge (`lib/eve-bridge.ts`, called from
+ * `app/api/chat` and `app/api/agent/hugo`), which already ran the app's full
+ * policy (auth, rate limit, daily usage cap, maintenance mode) before ever
+ * reaching here.
  *
- * Safe by construction: the agent only exposes its own clock/calculator tools —
- * every filesystem/shell/web/subagent tool from the default harness is disabled
- * in `agent/tools/*`.
+ * **`onMessage`** reads the `x-hugo-token` / `x-hugo-user-id` /
+ * `x-hugo-conversation-id` / `x-hugo-role` headers the bridge attaches to
+ * every call and constructs the session's REAL identity from them —
+ * overriding the route-level auth (which only proves "this is our server,"
+ * not which user). Tools/instructions read this back via
+ * `ctx.session.auth.current` (see `agent/lib/session-auth.ts`) and pass the
+ * same Convex JWT to every Convex call, so Convex's own verification remains
+ * the actual authority (never trust the identity as given).
  */
 export default eveChannel({
-  auth: [none()],
+  auth: [vercelOidc(), localDev()],
+  onMessage(ctx) {
+    const token = ctx.eve.request.headers.get("x-hugo-token");
+    const userId = ctx.eve.request.headers.get("x-hugo-user-id");
+    const conversationId = ctx.eve.request.headers.get("x-hugo-conversation-id");
+    const role = ctx.eve.request.headers.get("x-hugo-role");
+
+    if (!token || !userId) {
+      // No identity supplied — reject rather than silently running anonymously.
+      return { auth: null };
+    }
+
+    return {
+      auth: {
+        principalId: userId,
+        principalType: role === "admin" ? "admin" : "user",
+        subject: userId,
+        authenticator: "hugo-bridge",
+        attributes: {
+          convexToken: [token],
+          ...(conversationId ? { conversationId: [conversationId] } : {}),
+        },
+      },
+    };
+  },
 });
