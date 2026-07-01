@@ -17,25 +17,18 @@ const isProtectedRoute = createRouteMatcher([
   "/chat(.*)",
   "/settings(.*)",
   "/admin(.*)",
-  "/eve(.*)",
 ]);
-// The Eve showcase runtime is reached at /eve/v1/* (proxied by withEve). It's
-// the only gate in front of that runtime, so block unauthenticated callers here
-// with a 401 (not a redirect — these are API calls, not page loads).
-const isEveApi = createRouteMatcher(["/eve/v1(.*)"]);
+// /eve/v1/* (the Eve durable runtime, proxied by withEve) is gated entirely by
+// its own channel auth (agent/channels/eve.ts: vercelOidc()/localDev() at the
+// route level, plus onMessage requiring Hugo's own bridge headers) — it's
+// unreachable from the browser regardless of this proxy, so no gate is needed
+// here.
 
 export default convexAuthNextjsMiddleware(async (request, { convexAuth }) => {
   const authed = await convexAuth.isAuthenticated();
 
   if (isSignInPage(request) && authed) {
     return nextjsMiddlewareRedirect(request, "/");
-  }
-
-  if (isEveApi(request) && !authed) {
-    return new Response(JSON.stringify({ error: "Unauthorized" }), {
-      status: 401,
-      headers: { "content-type": "application/json", "cache-control": "no-store" },
-    });
   }
 
   if (isProtectedRoute(request) && !authed) {

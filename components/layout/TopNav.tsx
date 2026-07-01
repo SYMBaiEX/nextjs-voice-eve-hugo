@@ -5,13 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Authenticated, Unauthenticated, AuthLoading, useQuery } from "convex/react";
 import { useAuthActions } from "@convex-dev/auth/react";
-import {
-  FlaskConical,
-  LogOut,
-  MessageSquare,
-  Settings,
-  Shield,
-} from "lucide-react";
+import { LogOut, MessageSquare, Settings, Shield } from "lucide-react";
 import { toast } from "sonner";
 import { api } from "@/convex/_generated/api";
 import { cn, initials } from "@/lib/utils";
@@ -30,7 +24,6 @@ interface MenuLink {
 
 const BASE_LINKS: MenuLink[] = [
   { href: "/chat", label: "Chat", icon: MessageSquare },
-  { href: "/eve", label: "Hugo Labs (Eve)", icon: FlaskConical },
   { href: "/settings", label: "Settings", icon: Settings },
 ];
 

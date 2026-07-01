@@ -20,25 +20,27 @@ pnpm lint && pnpm typecheck && pnpm test
 
 All three must pass. If you touched Convex functions, also run `pnpm convex:codegen` and commit the generated changes. `pnpm build` must also succeed.
 
-## Two agent stacks (in-process Hugo + the Eve showcase)
+## Two agent stacks (BYOK in-process + Eve for everyone else)
 
-Hugo runs as **two** distinct agent stacks in one app:
+Hugo's text chat forks on **BYOK** (bring-your-own AI Gateway key); voice is always in-process (Eve has no realtime API — a hard constraint, not a choice).
 
-### 1. The in-process Hugo agent (`hugo-agent/`) — voice + text
+### 1. The in-process Hugo agent (`hugo-agent/`) — voice always, BYOK text
 
-The primary assistant. Authored the **Eve way** (filesystem-first: `instructions.md`, `skills/`, `tools/`) but invoked **in-process** from Next.js Route Handlers via AI SDK v7 (`lib/ai.ts` assembles the system prompt; `/api/chat` streams, voice uses AI Gateway realtime tokens). Both voice and text share this one definition.
+Authored the **Eve way** (filesystem-first: `instructions.md`, `skills/`, `tools/`) but invoked **in-process** from Next.js Route Handlers via AI SDK v7. Serves: (a) realtime voice, always, and (b) text chat for any non-admin user who's set their own AI Gateway key — the only way to actually honor a per-user key + model choice, since Eve's model is a single static value with no per-request override.
 
-- **Instructions:** `hugo-agent/instructions.md` is Hugo's core system prompt.
+- **Instructions:** `hugo-agent/instructions.md` is Hugo's core system prompt (`lib/ai.ts` assembles it for both voice and BYOK text).
 - **Skills:** add a focused Markdown file to `hugo-agent/skills/`.
-- **Tools:** add an AI-SDK `tool()` in `hugo-agent/tools/index.ts`. Tools execute against Convex with the authenticated user's token, wrap `execute` in `logged(...)`, and `redact(...)` sensitive I/O. Keep the client-safe projection in `hugo-agent/tools/registry.ts` in sync.
+- **Tool logic:** the actual business logic lives in `hugo-agent/tool-logic.ts` (`TOOL_DEFS`, framework-agnostic — shared with the Eve tools below, so every tool has exactly one implementation). `hugo-agent/tools/index.ts` is a thin AI-SDK `tool()` wrapper over it, wrapping each `execute` in `logged(...)` (the `toolCalls` ledger) and `redact(...)`ing sensitive I/O. Keep the client-safe projection in `hugo-agent/tools/registry.ts` in sync.
 
-### 2. The Eve runtime showcase (`agent/`) — text-only, at `/eve`
+### 2. The Eve runtime (`agent/`) — text for admin + keyless users
 
-"Hugo Labs" runs on the real **Eve durable runtime** (`eve@0.17.x`), wired via `withEve(nextConfig)` in `next.config.ts`. Eve is **out-of-process**: in dev a co-located `eve dev` server boots beside Next; on Vercel it co-deploys behind the web app, serving `/eve/v1/*` (rewritten by `withEve`). The `/eve` page talks to it with `useEveAgent` (`eve/react`).
+Admin and any non-admin **without** their own key run on the real **Eve durable runtime** (`eve@0.17.x`), wired via `withEve(nextConfig)` in `next.config.ts`. Eve is **out-of-process**: in dev a co-located `eve dev` server boots beside Next; on Vercel it co-deploys behind the web app, serving `/eve/v1/*` (rewritten by `withEve`). The browser never talks to Eve — `app/api/chat` and `app/api/agent/hugo` bridge to it server-to-server via `lib/eve-bridge.ts`, translating Eve's NDJSON event stream into the same AI-SDK UI-message-stream response `useChat` already consumes, so the client is unchanged.
 
-- Flat layout: `agent/agent.ts` (`defineAgent`), `agent/instructions.md`, `agent/tools/*.ts` (`defineTool`, filename = tool name), `agent/channels/eve.ts`.
-- **Safety:** every dangerous default-harness tool (`bash`, `read_file`, `write_file`, `glob`, `grep`, `web_fetch`, `web_search`) is disabled via `disableTool()` files; only the safe demo tools remain. Access is gated in `proxy.ts` (Convex auth on `/eve/v1/*`), so the channel uses `none()`.
-- Eve has **no realtime/voice support** — voice stays on the in-process stack. Requires Node ≥ 24. Build artifacts (`.eve/`, `.output/`, `.workflow-data/`) are gitignored.
+- Flat layout: `agent/agent.ts` (`defineAgent`, model = `DEFAULT_TEXT_MODEL`), `agent/instructions.md` + `agent/instructions/user-memory.ts` (per-user memory, `defineDynamic`), `agent/skills/*.md` (ported from `hugo-agent/skills/`), `agent/tools/*.ts` (`defineTool`, filename = tool name; thin wrappers over `hugo-agent/tool-logic.ts`), `agent/tools/index.ts` (the 3 admin-only tools, `defineDynamic` gated on role), `agent/channels/eve.ts`, `agent/lib/session-auth.ts` (reads the bridge-supplied identity back out of `ctx.session.auth`).
+- **Auth threading:** the channel's route-level `auth: [vercelOidc(), localDev()]` only admits Hugo's own server (never the browser). Its `onMessage` reads `x-hugo-token`/`x-hugo-user-id`/`x-hugo-conversation-id`/`x-hugo-role` headers the bridge attaches to every call and constructs the session's real identity from them; tools then call Convex with that same JWT, so **Convex's own verification remains the actual authority** — Eve's identity is a carrier, never trusted blindly.
+- **Safety:** every dangerous default-harness tool (`bash`, `read_file`, `write_file`, `glob`, `grep`, `web_fetch`, `web_search`) is disabled via `disableTool()` files; only Hugo's real tools remain.
+- No `import "server-only"` in anything Eve's own bundler compiles (`hugo-agent/tool-logic.ts`, `agent/lib/session-auth.ts`) — that package's implementation throws outside Next's special resolution; the marker lives on each consumer (route handlers, `hugo-agent/tools/index.ts`) instead.
+- Requires Node ≥ 24 and `server-only` as a **direct** dependency (pnpm doesn't hoist Next's transitive copy to root, which Eve's bundler needs). Build artifacts (`.eve/`, `.output/`, `.workflow-data/`) are gitignored.
 
 ## The Convex authorization invariant (non-negotiable)
 
