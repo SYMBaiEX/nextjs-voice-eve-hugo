@@ -201,7 +201,8 @@ export async function POST(req: Request) {
       }),
       prompt: parsed.data.prompt,
       tools: buildHugoTools({ token, conversationId, role: me.role }),
-      stopWhen: stepCountIs(5),
+      // 10, not 5 — see app/api/chat/route.ts's stopWhen for why.
+      stopWhen: stepCountIs(10),
       maxOutputTokens: callSettings.maxOutputTokens,
       maxRetries: callSettings.maxRetries,
       timeout: callSettings.timeoutMs,

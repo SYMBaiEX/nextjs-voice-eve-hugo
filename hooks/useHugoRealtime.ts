@@ -63,6 +63,10 @@ export function useHugoRealtime(
   const [error, setError] = useState<string | null>(null);
   const [audioLevel, setAudioLevel] = useState(0);
   const micStreamRef = useRef<MediaStream | null>(null);
+  // The most recent tool name a call was made for — attached to error reports
+  // so a provider-side failure right after a tool call is diagnosable
+  // server-side instead of only visible as a client error banner.
+  const lastToolNameRef = useRef<string | null>(null);
 
   // --- Audio-reactive analyser plumbing ---------------------------------
   const audioContextRef = useRef<AudioContext | null>(null);
@@ -103,6 +107,7 @@ export function useHugoRealtime(
     model,
     api: { token: tokenEndpoint },
     onToolCall: async ({ toolCall }) => {
+      lastToolNameRef.current = toolCall.toolName;
       if (!session) {
         return { error: "A voice session is required to run Hugo tools." };
       }
@@ -129,7 +134,23 @@ export function useHugoRealtime(
       return await response.json();
     },
     sessionConfig,
-    onError: (e: Error) => setError(e.message),
+    onError: (e: Error) => {
+      setError(e.message);
+      // Best-effort — a realtime error is otherwise only visible as a client
+      // banner. Never blocks or throws; the user-facing error is already set.
+      if (session) {
+        fetch("/api/realtime/tool-error", {
+          method: "POST",
+          credentials: "same-origin",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            message: e.message,
+            voiceSessionId: session.voiceSessionId,
+            lastToolName: lastToolNameRef.current ?? undefined,
+          }),
+        }).catch(() => {});
+      }
+    },
   });
 
   const {

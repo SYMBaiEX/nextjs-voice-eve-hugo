@@ -273,7 +273,10 @@ export async function POST(req: Request) {
       system,
       messages: modelMessages,
       tools: buildHugoTools({ token, conversationId, role: me.role }),
-      stopWhen: stepCountIs(5),
+      // 10, not 5: a delegated multi-part request (search, then save, then
+      // summarize, ...) needs headroom to chain tool calls end to end instead
+      // of running out of steps mid-task.
+      stopWhen: stepCountIs(10),
       // Even out token bursts into word-by-word deltas for a calmer stream.
       experimental_transform: smoothStream({ chunking: "word" }),
       maxOutputTokens: callSettings.maxOutputTokens,
