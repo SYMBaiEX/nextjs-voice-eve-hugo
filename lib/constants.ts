@@ -75,6 +75,19 @@ export const REALTIME_TOOL_RATE = { max: 30, windowMs: 60_000 } as const;
 /** Realtime browser token TTL hint (informational; the gateway controls actual TTL). */
 export const REALTIME_TOKEN_TTL_SECONDS = 60;
 
+/**
+ * How long the realtime TOOL GRANT stays valid — deliberately much longer than
+ * the 60s realtime token. The token is a short-lived credential just to OPEN
+ * the socket; the grant authorizes tool calls that happen throughout the whole
+ * voice session (which runs far longer). Tying the grant to the token TTL made
+ * every tool call after ~60s fail with "grant expired". The real security bound
+ * is the per-call recheck (auth + session ownership + session still
+ * connecting/active), not this TTL — once the session ends, tool calls are
+ * rejected by the status gate regardless. One hour covers any realistic session
+ * (voice is capped well under that by the daily minute limit) with margin.
+ */
+export const REALTIME_TOOL_GRANT_TTL_SECONDS = 60 * 60;
+
 /** Voices exposed in the UI. The gateway/model determines true availability. */
 export const VOICE_OPTIONS = [
   "alloy",

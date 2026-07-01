@@ -10,7 +10,11 @@ import type { Doc, Id } from "@/convex/_generated/dataModel";
 import { getRealtimeModel } from "@/lib/ai";
 import { getUserGateway } from "@/lib/user-gateway";
 import { rateLimit } from "@/lib/rate-limit";
-import { REALTIME_TOKEN_RATE, REALTIME_TOKEN_TTL_SECONDS } from "@/lib/constants";
+import {
+  REALTIME_TOKEN_RATE,
+  REALTIME_TOKEN_TTL_SECONDS,
+  REALTIME_TOOL_GRANT_TTL_SECONDS,
+} from "@/lib/constants";
 import { track } from "@/lib/telemetry";
 import { buildHugoTools } from "@/hugo-agent/tools";
 import type { RealtimeSessionConfig } from "@/lib/types";
@@ -111,12 +115,16 @@ function realtimeResponse(
 }
 
 async function mintRealtimeToolGrant(args: {
-  expiresAtMs: number;
   token: string;
   voiceSessionId: Id<"voiceSessions">;
-}): Promise<string> {
+}): Promise<{ grant: string; expiresAtMs: number }> {
   const grant = createRealtimeToolGrant();
-  const metadata = realtimeToolGrantMetadata(grant, args.expiresAtMs);
+  // Independent of the 60s realtime token: the grant must outlive the token so
+  // tool calls late in a voice session don't fail (see
+  // REALTIME_TOOL_GRANT_TTL_SECONDS). Per-call rechecks (auth + ownership +
+  // session still active) remain the real bound.
+  const expiresAtMs = Date.now() + REALTIME_TOOL_GRANT_TTL_SECONDS * 1000;
+  const metadata = realtimeToolGrantMetadata(grant, expiresAtMs);
   await fetchMutation(
     api.voiceSessions.setRealtimeToolGrant,
     {
@@ -127,7 +135,7 @@ async function mintRealtimeToolGrant(args: {
     },
     { token: args.token },
   );
-  return grant;
+  return { grant, expiresAtMs };
 }
 
 function attachRealtimeToolGrantCookie(args: {
@@ -256,10 +264,9 @@ export async function POST(req: Request) {
   });
   const cached = getCachedRealtimeToken(cacheKey);
   if (cached) {
-    let grant: string;
+    let grantResult: { grant: string; expiresAtMs: number };
     try {
-      grant = await mintRealtimeToolGrant({
-        expiresAtMs: cached.expiresAtMs,
+      grantResult = await mintRealtimeToolGrant({
         token,
         voiceSessionId: sessionParam,
       });
@@ -290,8 +297,8 @@ export async function POST(req: Request) {
       voiceSessionId: sessionParam,
     });
     return attachRealtimeToolGrantCookie({
-      expiresAtMs: cached.expiresAtMs,
-      grant,
+      expiresAtMs: grantResult.expiresAtMs,
+      grant: grantResult.grant,
       response: realtimeResponse({
         conversationId: session.conversationId,
         expiresAt: Math.floor(cached.expiresAtMs / 1000),
@@ -376,8 +383,7 @@ export async function POST(req: Request) {
     });
     pruneRealtimeTokenCache();
 
-    const grant = await mintRealtimeToolGrant({
-      expiresAtMs,
+    const grantResult = await mintRealtimeToolGrant({
       token,
       voiceSessionId: sessionParam,
     });
@@ -396,8 +402,8 @@ export async function POST(req: Request) {
     });
 
     return attachRealtimeToolGrantCookie({
-      expiresAtMs,
-      grant,
+      expiresAtMs: grantResult.expiresAtMs,
+      grant: grantResult.grant,
       response: realtimeResponse({
         conversationId: session.conversationId,
         expiresAt: Math.floor(expiresAtMs / 1000),
