@@ -137,6 +137,14 @@ export const USER_TOOLS: ToolMeta[] = [
     readOnly: false,
     requiresApproval: false,
   },
+  {
+    name: "draftEmail",
+    description:
+      "Draft an email for the user to review and send themselves — never sends anything.",
+    scope: "user",
+    readOnly: true,
+    requiresApproval: false,
+  },
 ];
 
 export const ADMIN_TOOLS: ToolMeta[] = [

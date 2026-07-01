@@ -747,6 +747,7 @@ const TOOL_TICKER_LABELS: Record<string, string> = {
   listTasks: "Checking your tasks",
   completeTask: "Completing a task",
   deleteTask: "Removing a task",
+  draftEmail: "Drafting an email",
 };
 
 function toolTickerLabel(toolName: string): string {

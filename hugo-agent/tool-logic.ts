@@ -498,7 +498,7 @@ export const TOOL_DEFS = {
 
   searchWeb: toolDef({
     description:
-      "Search the web for current information — news, facts, or research not in your training data. Keep the spoken/written summary brief; don't read out every result verbatim.",
+      "Search the web for current information — news, facts, or research not in your training data. Synthesize a short digest across the results rather than listing them one by one; keep the spoken/written summary brief.",
     inputSchema: z.object({
       query: z.string().min(1).max(400),
       domainType: z.enum(["web", "news", "research_paper"]).default("web"),
@@ -587,6 +587,23 @@ export const TOOL_DEFS = {
     },
   }),
 
+  draftEmail: toolDef({
+    description:
+      "Draft an email for the user to review and send themselves — this does NOT send anything. Compose the subject and body yourself, then call this to present the draft in a clear, structured way.",
+    inputSchema: z.object({
+      to: z
+        .string()
+        .max(200)
+        .optional()
+        .describe("Recipient name or address, if known."),
+      subject: z.string().min(1).max(200),
+      body: z.string().min(1).max(4000),
+    }),
+    logic: async (_ctx, { to, subject, body }) => {
+      return { drafted: true, to: to ?? null, subject, body };
+    },
+  }),
+
   // ---- Admin-only ----------------------------------------------------------
 
   getSystemUsageSummary: toolDef({
@@ -651,6 +668,7 @@ export const USER_TOOL_NAMES = [
   "listTasks",
   "completeTask",
   "deleteTask",
+  "draftEmail",
 ] as const;
 
 export const ADMIN_TOOL_NAMES = [
