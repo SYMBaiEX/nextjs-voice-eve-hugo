@@ -64,6 +64,23 @@ const LEVEL_DECAY = 0.12;
 const FALLBACK_REALTIME_INSTRUCTIONS =
   "You are Hugo, a concise realtime voice agent. Speak in short natural turns, use tools only when helpful, and recover gracefully from errors.";
 
+/**
+ * A known-benign, recoverable race in `ai@7`'s (experimental) realtime state
+ * machine: after a tool call resolves, the SDK auto-fires `response-create`
+ * (see `ai`'s `realtime-session.ts` `maybeRequestToolResponse`) — but with
+ * `server-vad` turn detection, any voice activity picked up while a slower
+ * tool (e.g. a real network call like `searchWeb`) was still resolving can
+ * make the SERVER start its own response first, so our follow-up request is
+ * rejected as a duplicate. The response that was ALREADY in progress
+ * continues normally — this is a rejected redundant request, not a session
+ * failure, so it must not tear down an otherwise-healthy voice session or
+ * show the user a raw technical toast (confirmed live: this exact error
+ * killed the whole session over a single search call).
+ */
+function isBenignActiveResponseRace(message: string): boolean {
+  return /already has an active response in progress/i.test(message);
+}
+
 export function useHugoRealtime(
   session: HugoRealtimeSession | null,
 ): UseHugoRealtimeResult {
@@ -145,10 +162,14 @@ export function useHugoRealtime(
     },
     sessionConfig,
     onError: (e: Error) => {
-      setError(e.message);
-      if (!reducedMotion) void playErrorChime();
-      // Best-effort — a realtime error is otherwise only visible as a client
-      // banner. Never blocks or throws; the user-facing error is already set.
+      const benign = isBenignActiveResponseRace(e.message);
+      // Only a real failure disrupts the session — see isBenignActiveResponseRace.
+      if (!benign) {
+        setError(e.message);
+        if (!reducedMotion) void playErrorChime();
+      }
+      // Best-effort — otherwise a realtime error (benign or not) is only ever
+      // visible as a client banner. Never blocks or throws.
       if (session) {
         fetch("/api/realtime/tool-error", {
           method: "POST",
@@ -158,6 +179,7 @@ export function useHugoRealtime(
             message: e.message,
             voiceSessionId: session.voiceSessionId,
             lastToolName: lastToolNameRef.current ?? undefined,
+            benign,
           }),
         }).catch(() => {});
       }

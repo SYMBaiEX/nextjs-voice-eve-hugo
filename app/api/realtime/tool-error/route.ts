@@ -22,6 +22,11 @@ const Body = z.object({
   message: z.string().min(1).max(2000),
   voiceSessionId: z.string().min(1),
   lastToolName: z.string().max(80).optional(),
+  // Whether the client already recognized this as a known-benign, recoverable
+  // SDK race (see useHugoRealtime.ts's isBenignActiveResponseRace) and didn't
+  // disrupt the session for it — kept distinct in telemetry from a real
+  // failure so recurrence of each is trackable separately.
+  benign: z.boolean().optional(),
 });
 
 const NO_STORE_HEADERS = { "Cache-Control": "no-store" } as const;
@@ -42,7 +47,7 @@ export async function POST(req: Request) {
       { status: 400, headers: NO_STORE_HEADERS },
     );
   }
-  const { message, voiceSessionId, lastToolName } = parsed.data;
+  const { message, voiceSessionId, lastToolName, benign } = parsed.data;
 
   const me = await fetchQuery(api.users.currentUser, {}, { token });
   if (!me) {
@@ -69,6 +74,7 @@ export async function POST(req: Request) {
   track("realtime_client_error", {
     error: message,
     lastToolName: lastToolName ?? null,
+    benign: benign ?? false,
     userId: me._id,
     voiceSessionId,
   });
