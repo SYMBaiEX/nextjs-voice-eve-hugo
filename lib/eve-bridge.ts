@@ -19,6 +19,16 @@ import type { Role } from "@/lib/types";
  * resolve). `agent/channels/eve.ts`'s route auth only admits this trusted
  * server; its `onMessage` derives the session's real per-user identity from
  * the `x-hugo-*` headers set here.
+ *
+ * The route auth itself (`vercelOidc()`/`localDev()` in `agent/channels/eve.ts`)
+ * needs the client to actually present a credential — `localDev()` only grants
+ * access when the request's URL is loopback (`localhost`/`127.*`), which is
+ * true in local dev but never true on a real Vercel deployment. So this client
+ * always offers the deployment's own `VERCEL_OIDC_TOKEN` (the same
+ * auto-provided token `lib/ai.ts`'s `isAiConfigured()` already relies on for
+ * the AI Gateway) as a `vercelOidc` bearer credential; `Client` no-ops this
+ * when the token is empty (local dev without it), so `localDev()`'s loopback
+ * check keeps working exactly as before there.
  */
 
 export interface EveBridgeCaller {
@@ -36,6 +46,9 @@ export interface EveTurnUsage {
 function eveClient(originUrl: string, caller: EveBridgeCaller): Client {
   return new Client({
     host: new URL(originUrl).origin,
+    // Empty/missing token resolves to "" here, which `Client` treats as "send
+    // no Authorization header" — a safe no-op in local dev without one.
+    auth: { vercelOidc: { token: () => process.env.VERCEL_OIDC_TOKEN ?? "" } },
     headers: {
       "x-hugo-token": caller.token,
       "x-hugo-user-id": caller.userId,
