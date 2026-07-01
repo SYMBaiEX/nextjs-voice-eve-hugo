@@ -197,6 +197,22 @@ function HugoSurfaceInner({
     });
   }, []);
 
+  // Recent tool calls for this user — drives the `tool_running` orb state and
+  // status-line label in BOTH text and voice mode (voice's own hook has no
+  // visibility into server-side tool execution beyond the one call it made).
+  const recentToolCalls = useQuery(
+    api.toolCalls.listOwn,
+    canRunProtectedQueries ? { limit: 5 } : "skip",
+  );
+  const runningToolName = useMemo(() => {
+    const running = recentToolCalls?.find(
+      (c) =>
+        c.completedAt == null &&
+        (!activeConversationId || c.conversationId === activeConversationId),
+    );
+    return running?.toolName ?? null;
+  }, [recentToolCalls, activeConversationId]);
+
   // ── Voice session lifecycle (lifted from HugoVoicePanel) ──
   const [session, setSession] = useState<HugoRealtimeSession | null>(null);
   const [isStarting, setIsStarting] = useState(false);
@@ -453,7 +469,14 @@ function HugoSurfaceInner({
   );
 
   const voiceActive = !!session;
-  const orbState = isStarting ? "connecting" : voiceActive ? rt.orbState : "idle";
+  const baseOrbState = voiceActive ? rt.orbState : "idle";
+  // A tool call in flight takes over the orb visually — except while Hugo is
+  // actually speaking or in an error state, which stay visible as-is.
+  const orbState = isStarting
+    ? "connecting"
+    : runningToolName && baseOrbState !== "speaking" && baseOrbState !== "error"
+      ? "tool_running"
+      : baseOrbState;
   const canInterrupt =
     rt.status === "connected" &&
     (rt.orbState === "speaking" || rt.orbState === "thinking");
@@ -572,8 +595,8 @@ function HugoSurfaceInner({
           {/* Live voice status bar */}
           {voiceActive && (
             <div className="mb-2 flex items-center justify-center gap-2">
-              <Badge variant={rt.orbState === "speaking" ? "cyan" : "blue"}>
-                {isStarting ? "Connecting…" : statusLabel(rt.orbState)}
+              <Badge variant={orbState === "speaking" ? "cyan" : "blue"}>
+                {isStarting ? "Connecting…" : statusLabel(orbState, runningToolName)}
               </Badge>
               <Button
                 variant="ghost"
@@ -674,9 +697,11 @@ function HugoSurfaceInner({
               <>
                 <Spinner />
                 <span className="text-xs font-mono text-text-muted">
-                  {status === "submitted"
-                    ? "Hugo is thinking…"
-                    : "Hugo is responding…"}
+                  {runningToolName
+                    ? `${toolTickerLabel(runningToolName)}…`
+                    : status === "submitted"
+                      ? "Hugo is thinking…"
+                      : "Hugo is responding…"}
                 </span>
               </>
             ) : (
@@ -699,7 +724,35 @@ function HugoSurfaceInner({
   );
 }
 
-function statusLabel(state: string): string {
+/** Friendly present-participle label for a running tool, for the status line /
+ *  voice badge — falls back to a generic camelCase→words split for any tool
+ *  not explicitly listed here (new tools stay covered without a code change,
+ *  just less polished wording until added). */
+const TOOL_TICKER_LABELS: Record<string, string> = {
+  getCurrentUserProfile: "Checking your profile",
+  getCurrentUsageSummary: "Checking usage",
+  listUserMemories: "Checking memory",
+  getConversationTranscript: "Reading the conversation",
+  updateUserPreferences: "Updating preferences",
+  getRecentConversationContext: "Checking recent conversations",
+  saveUserPreference: "Saving a preference",
+  createConversationSummary: "Summarizing",
+  searchUserConversations: "Searching conversations",
+  getWeather: "Checking the weather",
+  searchWeb: "Searching the web",
+  getSystemUsageSummary: "Checking system usage",
+  getUserUsageSummary: "Checking usage",
+  getVoiceSessionDiagnostics: "Checking voice diagnostics",
+};
+
+function toolTickerLabel(toolName: string): string {
+  return (
+    TOOL_TICKER_LABELS[toolName] ??
+    `Running ${toolName.replace(/([A-Z])/g, " $1").toLowerCase().trim()}`
+  );
+}
+
+function statusLabel(state: string, runningToolName?: string | null): string {
   switch (state) {
     case "listening":
       return "Listening";
@@ -710,7 +763,7 @@ function statusLabel(state: string): string {
     case "connecting":
       return "Connecting…";
     case "tool_running":
-      return "Running tool";
+      return runningToolName ? toolTickerLabel(runningToolName) : "Running tool";
     default:
       return "Voice live";
   }
