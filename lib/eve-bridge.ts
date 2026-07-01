@@ -1,5 +1,6 @@
 import "server-only";
 import { Client, type SessionState } from "eve/client";
+import { getVercelOidcToken } from "@vercel/oidc";
 import {
   createUIMessageStream,
   createUIMessageStreamResponse,
@@ -24,12 +25,33 @@ import type { Role } from "@/lib/types";
  * needs the client to actually present a credential — `localDev()` only grants
  * access when the request's URL is loopback (`localhost`/`127.*`), which is
  * true in local dev but never true on a real Vercel deployment. So this client
- * always offers the deployment's own `VERCEL_OIDC_TOKEN` (the same
- * auto-provided token `lib/ai.ts`'s `isAiConfigured()` already relies on for
- * the AI Gateway) as a `vercelOidc` bearer credential; `Client` no-ops this
- * when the token is empty (local dev without it), so `localDev()`'s loopback
- * check keeps working exactly as before there.
+ * offers a Vercel OIDC token as a `vercelOidc` bearer credential via
+ * `getVercelOidcToken()` (`@vercel/oidc`) — NOT a bare `process.env
+ * .VERCEL_OIDC_TOKEN` read, which was the original (buggy) approach here: that
+ * env var is only fresh at cold start, so a function instance kept warm past
+ * the token's lifetime (Fluid Compute reuses instances) ends up presenting an
+ * expired token, which the Eve runtime rejects with a hard "Authorization is
+ * required for this route." — an intermittent failure confirmed in production
+ * logs, not something a retry would fix on its own. `getVercelOidcToken()` is
+ * Vercel's documented mechanism for exactly this "call another Vercel-hosted
+ * service" case: it reads the CURRENT request's own fresh OIDC token from
+ * Vercel's per-invocation request context first (only falling back to the
+ * possibly-stale env var, and only refreshing via the Vercel CLI/keyring —
+ * which isn't available inside a deployed function — as a last resort), so it
+ * can't go stale the way the raw env read could.
+ *
+ * It throws when no token is available anywhere (e.g. local `next dev`
+ * without any Vercel env), so the call is wrapped to degrade to "" — `Client`
+ * treats that as "send no Authorization header", letting `localDev()`'s
+ * loopback check take over there exactly as before.
  */
+async function eveOidcToken(): Promise<string> {
+  try {
+    return await getVercelOidcToken();
+  } catch {
+    return "";
+  }
+}
 
 export interface EveBridgeCaller {
   userId: string;
@@ -48,7 +70,7 @@ function eveClient(originUrl: string, caller: EveBridgeCaller): Client {
     host: new URL(originUrl).origin,
     // Empty/missing token resolves to "" here, which `Client` treats as "send
     // no Authorization header" — a safe no-op in local dev without one.
-    auth: { vercelOidc: { token: () => process.env.VERCEL_OIDC_TOKEN ?? "" } },
+    auth: { vercelOidc: { token: eveOidcToken } },
     headers: {
       "x-hugo-token": caller.token,
       "x-hugo-user-id": caller.userId,

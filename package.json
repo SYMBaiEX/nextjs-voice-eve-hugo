@@ -24,6 +24,7 @@
     "@ai-sdk/openai": "^4.0.3",
     "@ai-sdk/react": "^4.0.7",
     "@convex-dev/auth": "^0.0.94",
+    "@vercel/oidc": "^3.8.0",
     "ai": "^7.0.6",
     "animejs": "^4.5.0",
     "class-variance-authority": "^0.7.1",
