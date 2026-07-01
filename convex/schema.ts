@@ -59,6 +59,9 @@ export default defineSchema({
     // BYOK: the user's own AI Gateway key, AES-GCM-encrypted server-side
     // (never stored or returned in plaintext). Admins use the server key.
     gatewayKeyEncrypted: v.optional(v.string()),
+    // BYOK: the user's own TinyFish Search API key, same encryption scheme.
+    // Admins use the server (TINYFISH_API_KEY) key.
+    tinyfishKeyEncrypted: v.optional(v.string()),
   })
     .index("email", ["email"])
     .index("by_role", ["role"])

@@ -1,5 +1,6 @@
 import { disableTool } from "eve/tools";
 
-// Showcase agent: the default-harness read_file tool is disabled for safety —
-// this demo only exposes its own safe tools (clock, calculator) + todo.
+// The default-harness read_file tool is disabled for safety — Hugo only exposes
+// its own vetted tools (hugo-agent/tool-logic.ts), never raw filesystem/shell/
+// network access to the model.
 export default disableTool();

@@ -91,6 +91,22 @@ export const USER_TOOLS: ToolMeta[] = [
     readOnly: true,
     requiresApproval: false,
   },
+  {
+    name: "getWeather",
+    description:
+      "Get the current weather for a city or place name (temperature, conditions, wind, humidity).",
+    scope: "user",
+    readOnly: true,
+    requiresApproval: false,
+  },
+  {
+    name: "searchWeb",
+    description:
+      "Search the web for current information — news, facts, or research not in your training data.",
+    scope: "user",
+    readOnly: true,
+    requiresApproval: false,
+  },
 ];
 
 export const ADMIN_TOOLS: ToolMeta[] = [

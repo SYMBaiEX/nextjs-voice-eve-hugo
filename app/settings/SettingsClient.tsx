@@ -13,6 +13,7 @@ import {
   KeyRound,
   Lock,
   Plus,
+  Search,
   Shield,
   Trash2,
   User as UserIcon,
@@ -20,8 +21,13 @@ import {
 import { toast } from "sonner";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
-import { AI_GATEWAY_KEYS_URL, VOICE_OPTIONS } from "@/lib/constants";
+import {
+  AI_GATEWAY_KEYS_URL,
+  TINYFISH_KEYS_URL,
+  VOICE_OPTIONS,
+} from "@/lib/constants";
 import { GatewayKeyDialog } from "@/components/chat/GatewayKeyDialog";
+import { TinyfishKeyDialog } from "@/components/settings/TinyfishKeyDialog";
 import { ThemeToggle } from "@/components/layout/ThemeToggle";
 import {
   Card,
@@ -200,6 +206,7 @@ export function SettingsClient() {
 
   const [savingPref, setSavingPref] = useState(false);
   const [keyDialogOpen, setKeyDialogOpen] = useState(false);
+  const [tinyfishDialogOpen, setTinyfishDialogOpen] = useState(false);
 
   useEffect(() => {
     if (!isSigningOut && !isAuthLoading && !isAuthenticated) {
@@ -342,6 +349,61 @@ export function SettingsClient() {
                   {me?.hasGatewayKey ? "Update or remove" : "Add key"}
                 </Button>
               </div>
+            </>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* TinyFish key (BYOK, web search) */}
+      <Card className="animate-rise">
+        <SectionHeading
+          icon={Search}
+          title="Web search key"
+          description="Bring your own TinyFish Search API key so Hugo can search the web for you."
+        />
+        <CardContent className="flex flex-col gap-3">
+          {me === undefined ? (
+            <Skeleton className="h-9 w-full" />
+          ) : me?.role === "admin" ? (
+            <p className="text-sm text-text-muted">
+              You’re an admin — Hugo uses the platform server key for your
+              account, so no personal key is required.
+            </p>
+          ) : (
+            <>
+              <div className="flex items-center justify-between gap-3">
+                <span className="text-sm text-text-secondary">Status</span>
+                {me?.hasTinyfishKey ? (
+                  <Badge variant="cyan" className="gap-1">
+                    <Check aria-hidden className="size-3" />
+                    Connected
+                  </Badge>
+                ) : (
+                  <Badge variant="muted">Not set</Badge>
+                )}
+              </div>
+              <Separator />
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <a
+                  href={TINYFISH_KEYS_URL}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1 text-xs text-hugo-cyan hover:underline"
+                >
+                  Get a key at agent.tinyfish.ai
+                  <ExternalLink aria-hidden className="size-3" />
+                </a>
+                <Button
+                  variant={me?.hasTinyfishKey ? "subtle" : "primary"}
+                  size="sm"
+                  onClick={() => setTinyfishDialogOpen(true)}
+                >
+                  {me?.hasTinyfishKey ? "Update or remove" : "Add key"}
+                </Button>
+              </div>
+              <p className="text-xs text-text-muted">
+                Optional — without a key, Hugo just can’t search the web for you.
+              </p>
             </>
           )}
         </CardContent>
@@ -665,11 +727,16 @@ export function SettingsClient() {
         </CardContent>
       </Card>
 
-      {/* BYOK key dialog (shared with the chat banner) */}
+      {/* BYOK key dialogs (gateway dialog shared with the chat banner) */}
       <GatewayKeyDialog
         open={keyDialogOpen}
         hasKey={!!me?.hasGatewayKey}
         onClose={() => setKeyDialogOpen(false)}
+      />
+      <TinyfishKeyDialog
+        open={tinyfishDialogOpen}
+        hasKey={!!me?.hasTinyfishKey}
+        onClose={() => setTinyfishDialogOpen(false)}
       />
     </div>
   );

@@ -3,6 +3,7 @@ import { fetchQuery, fetchMutation } from "convex/nextjs";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
 import type { Role, UserPreferences } from "@/lib/types";
+import { getUserTinyfishKey } from "@/lib/tinyfish";
 
 /**
  * Hugo's tool business logic (PRD 5.10) — framework-agnostic, shared by both
@@ -82,6 +83,180 @@ export function redact(value: unknown): unknown {
     out[k] = SENSITIVE.test(k) ? "[redacted]" : redact(v);
   }
   return out;
+}
+
+/** WMO weather-interpretation codes (the standard table Open-Meteo returns). */
+const WMO_CODES: Record<number, string> = {
+  0: "Clear sky",
+  1: "Mainly clear",
+  2: "Partly cloudy",
+  3: "Overcast",
+  45: "Fog",
+  48: "Depositing rime fog",
+  51: "Light drizzle",
+  53: "Moderate drizzle",
+  55: "Dense drizzle",
+  56: "Light freezing drizzle",
+  57: "Dense freezing drizzle",
+  61: "Slight rain",
+  63: "Moderate rain",
+  65: "Heavy rain",
+  66: "Light freezing rain",
+  67: "Heavy freezing rain",
+  71: "Slight snow fall",
+  73: "Moderate snow fall",
+  75: "Heavy snow fall",
+  77: "Snow grains",
+  80: "Slight rain showers",
+  81: "Moderate rain showers",
+  82: "Violent rain showers",
+  85: "Slight snow showers",
+  86: "Heavy snow showers",
+  95: "Thunderstorm",
+  96: "Thunderstorm with slight hail",
+  99: "Thunderstorm with heavy hail",
+};
+
+/** Geocode a place name, then fetch current conditions — both via Open-Meteo
+ *  (free, no API key). Framework- and provider-agnostic, so both the weather
+ *  tool AND its Eve counterpart call this same function. */
+async function getWeatherForLocation(
+  location: string,
+  unit: "fahrenheit" | "celsius",
+): Promise<
+  | {
+      location: string;
+      country: string | null;
+      temperature: number;
+      temperatureUnit: string;
+      conditions: string;
+      windSpeed: number;
+      windSpeedUnit: string;
+      humidityPercent: number;
+      observedAt: string;
+    }
+  | { error: string }
+> {
+  const geoUrl = new URL("https://geocoding-api.open-meteo.com/v1/search");
+  geoUrl.searchParams.set("name", location);
+  geoUrl.searchParams.set("count", "1");
+  geoUrl.searchParams.set("language", "en");
+  geoUrl.searchParams.set("format", "json");
+
+  const geoRes = await fetch(geoUrl).catch(() => null);
+  const geo = await geoRes?.json().catch(() => null);
+  const place = geo?.results?.[0] as
+    | { name?: string; country_code?: string; latitude?: number; longitude?: number }
+    | undefined;
+  if (!place?.latitude || !place.longitude) {
+    return { error: `Couldn't find a location matching "${location}".` };
+  }
+
+  const forecastUrl = new URL("https://api.open-meteo.com/v1/forecast");
+  forecastUrl.searchParams.set("latitude", String(place.latitude));
+  forecastUrl.searchParams.set("longitude", String(place.longitude));
+  forecastUrl.searchParams.set(
+    "current",
+    "temperature_2m,weather_code,wind_speed_10m,relative_humidity_2m",
+  );
+  forecastUrl.searchParams.set("temperature_unit", unit);
+  forecastUrl.searchParams.set(
+    "wind_speed_unit",
+    unit === "fahrenheit" ? "mph" : "kmh",
+  );
+
+  const wxRes = await fetch(forecastUrl).catch(() => null);
+  const wx = await wxRes?.json().catch(() => null);
+  const current = wx?.current as
+    | {
+        time?: string;
+        temperature_2m?: number;
+        weather_code?: number;
+        wind_speed_10m?: number;
+        relative_humidity_2m?: number;
+      }
+    | undefined;
+  if (current?.temperature_2m === undefined) {
+    return { error: "Couldn't fetch current weather right now." };
+  }
+
+  return {
+    location: place.name ?? location,
+    country: place.country_code ?? null,
+    temperature: current.temperature_2m,
+    temperatureUnit: unit === "fahrenheit" ? "°F" : "°C",
+    conditions: WMO_CODES[current.weather_code ?? -1] ?? "Unknown",
+    windSpeed: current.wind_speed_10m ?? 0,
+    windSpeedUnit: unit === "fahrenheit" ? "mph" : "km/h",
+    humidityPercent: current.relative_humidity_2m ?? 0,
+    observedAt: current.time ?? new Date().toISOString(),
+  };
+}
+
+interface TinyfishResult {
+  position?: number;
+  site_name?: string;
+  title?: string;
+  snippet?: string;
+  url?: string;
+}
+
+interface TinyfishSearchResponse {
+  query?: string;
+  results?: TinyfishResult[];
+  total_results?: number;
+  page?: number;
+}
+
+/** Search the web via TinyFish (BYOK — admin uses the server key, everyone
+ *  else brings their own key from Settings). Framework-agnostic so both the
+ *  search tool AND its Eve counterpart call this same function. */
+async function searchTheWeb(
+  token: string,
+  query: string,
+  domainType: "web" | "news" | "research_paper",
+  limit: number,
+): Promise<
+  | {
+      query: string;
+      results: { title: string; url: string; snippet: string; siteName: string }[];
+      totalResults: number;
+    }
+  | { error: string }
+> {
+  const { apiKey, configured } = await getUserTinyfishKey(token);
+  if (!configured || !apiKey) {
+    return {
+      error:
+        "Web search isn't set up yet — add a TinyFish API key in Settings to enable it.",
+    };
+  }
+
+  const url = new URL("https://api.search.tinyfish.ai");
+  url.searchParams.set("query", query);
+  url.searchParams.set("domain_type", domainType);
+
+  const res = await fetch(url, { headers: { "X-API-Key": apiKey } }).catch(
+    () => null,
+  );
+  if (!res?.ok) {
+    return { error: "The web search provider is unavailable right now." };
+  }
+  const data = (await res.json().catch(() => null)) as
+    | TinyfishSearchResponse
+    | null;
+  const results = Array.isArray(data?.results) ? data.results : [];
+
+  return {
+    query,
+    results: results.slice(0, limit).map((r) => ({
+      title: r.title ?? "",
+      url: r.url ?? "",
+      snippet: r.snippet ?? "",
+      siteName: r.site_name ?? "",
+    })),
+    totalResults: data?.total_results ?? results.length,
+  };
 }
 
 /** One tool's shared shape: description + input schema + framework-agnostic
@@ -286,6 +461,35 @@ export const TOOL_DEFS = {
     },
   }),
 
+  getWeather: toolDef({
+    description:
+      "Get the current weather for a city or place name (temperature, conditions, wind, humidity).",
+    inputSchema: z.object({
+      location: z
+        .string()
+        .min(1)
+        .max(120)
+        .describe("A city or place name, e.g. 'Austin, TX' or 'Tokyo'."),
+      unit: z.enum(["fahrenheit", "celsius"]).default("fahrenheit"),
+    }),
+    logic: async (_ctx, { location, unit }) => {
+      return await getWeatherForLocation(location, unit);
+    },
+  }),
+
+  searchWeb: toolDef({
+    description:
+      "Search the web for current information — news, facts, or research not in your training data.",
+    inputSchema: z.object({
+      query: z.string().min(1).max(400),
+      domainType: z.enum(["web", "news", "research_paper"]).default("web"),
+      limit: z.number().int().min(1).max(10).default(5),
+    }),
+    logic: async (ctx, { query, domainType, limit }) => {
+      return await searchTheWeb(ctx.token, query, domainType, limit);
+    },
+  }),
+
   // ---- Admin-only ----------------------------------------------------------
 
   getSystemUsageSummary: toolDef({
@@ -344,6 +548,8 @@ export const USER_TOOL_NAMES = [
   "saveUserPreference",
   "createConversationSummary",
   "searchUserConversations",
+  "getWeather",
+  "searchWeb",
 ] as const;
 
 export const ADMIN_TOOL_NAMES = [

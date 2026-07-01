@@ -1,0 +1,95 @@
+import { NextResponse } from "next/server";
+import { z } from "zod";
+import { fetchMutation, authToken } from "@/lib/convex-server";
+import { api } from "@/convex/_generated/api";
+import { encryptSecret, isEncryptionConfigured } from "@/lib/crypto";
+
+/**
+ * POST/DELETE /api/tinyfish-key — manage the caller's own TinyFish Search API
+ * key (BYOK), mirroring /api/gateway-key's shape for a second secret type.
+ *
+ * POST validates the key against a real TinyFish search call, encrypts it
+ * server-side, and stores only the ciphertext (the plaintext never persists
+ * or returns to the client). DELETE removes it. Admins use the server key
+ * (`TINYFISH_API_KEY`) and don't need this, but it's available to any
+ * authenticated user.
+ */
+
+const Body = z.object({ key: z.string().min(8).max(400) });
+const NO_STORE = { "Cache-Control": "no-store" } as const;
+
+export async function POST(req: Request) {
+  const token = await authToken();
+  if (!token) {
+    return NextResponse.json(
+      { error: "Unauthorized" },
+      { status: 401, headers: NO_STORE },
+    );
+  }
+  if (!isEncryptionConfigured()) {
+    return NextResponse.json(
+      { error: "Key storage isn’t configured on the server." },
+      { status: 503, headers: NO_STORE },
+    );
+  }
+
+  const parsed = Body.safeParse(await req.json().catch(() => ({})));
+  if (!parsed.success) {
+    return NextResponse.json(
+      { error: "Provide a valid TinyFish API key." },
+      { status: 400, headers: NO_STORE },
+    );
+  }
+  const key = parsed.data.key.trim();
+
+  // Validate the key actually authenticates with a real (cheap) search call —
+  // TinyFish has no dedicated "validate" endpoint.
+  try {
+    const url = new URL("https://api.search.tinyfish.ai");
+    url.searchParams.set("query", "test");
+    const res = await fetch(url, { headers: { "X-API-Key": key } });
+    if (!res.ok) throw new Error(`TinyFish responded ${res.status}`);
+  } catch {
+    return NextResponse.json(
+      { error: "That key didn’t work with TinyFish — double-check it." },
+      { status: 400, headers: NO_STORE },
+    );
+  }
+
+  const encrypted = encryptSecret(key);
+  if (!encrypted) {
+    return NextResponse.json(
+      { error: "Key storage isn’t configured on the server." },
+      { status: 503, headers: NO_STORE },
+    );
+  }
+
+  try {
+    await fetchMutation(api.users.setTinyfishKey, { encrypted }, { token });
+  } catch {
+    return NextResponse.json(
+      { error: "Couldn’t save your key. Please try again." },
+      { status: 500, headers: NO_STORE },
+    );
+  }
+  return NextResponse.json({ ok: true }, { headers: NO_STORE });
+}
+
+export async function DELETE() {
+  const token = await authToken();
+  if (!token) {
+    return NextResponse.json(
+      { error: "Unauthorized" },
+      { status: 401, headers: NO_STORE },
+    );
+  }
+  try {
+    await fetchMutation(api.users.clearTinyfishKey, {}, { token });
+  } catch {
+    return NextResponse.json(
+      { error: "Couldn’t remove your key. Please try again." },
+      { status: 500, headers: NO_STORE },
+    );
+  }
+  return NextResponse.json({ ok: true }, { headers: NO_STORE });
+}

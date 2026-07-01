@@ -28,6 +28,7 @@ export const currentUser = query({
       usageLimits: user.usageLimits ?? null,
       // BYOK status only — the encrypted key itself is never returned.
       hasGatewayKey: !!user.gatewayKeyEncrypted,
+      hasTinyfishKey: !!user.tinyfishKeyEncrypted,
       createdAt: user.createdAt,
       lastSeenAt: user.lastSeenAt,
     };
@@ -69,6 +70,43 @@ export const gatewayKeyForSelf = query({
   handler: async (ctx) => {
     const user = await getCurrentUser(ctx);
     return user?.gatewayKeyEncrypted ?? null;
+  },
+});
+
+/** Store the current user's encrypted TinyFish Search API key (ciphertext
+ *  only — same scheme as `setGatewayKey`). */
+export const setTinyfishKey = mutation({
+  args: { encrypted: v.string() },
+  handler: async (ctx, { encrypted }) => {
+    const user = await requireUser(ctx);
+    await ctx.db.patch(user._id, {
+      tinyfishKeyEncrypted: encrypted,
+      updatedAt: Date.now(),
+    });
+    return { ok: true };
+  },
+});
+
+/** Remove the current user's stored TinyFish key. */
+export const clearTinyfishKey = mutation({
+  args: {},
+  handler: async (ctx) => {
+    const user = await requireUser(ctx);
+    await ctx.db.patch(user._id, {
+      tinyfishKeyEncrypted: undefined,
+      updatedAt: Date.now(),
+    });
+    return { ok: true };
+  },
+});
+
+/** The caller's OWN encrypted TinyFish key (ciphertext), for tool logic to
+ *  decrypt server-side. Never another user's, never plaintext. */
+export const tinyfishKeyForSelf = query({
+  args: {},
+  handler: async (ctx) => {
+    const user = await getCurrentUser(ctx);
+    return user?.tinyfishKeyEncrypted ?? null;
   },
 });
 
@@ -116,6 +154,7 @@ export const getByIdForAdmin = query({
     if (!user) return null;
     const safe: Partial<typeof user> = { ...user };
     delete safe.gatewayKeyEncrypted;
+    delete safe.tinyfishKeyEncrypted;
     return safe;
   },
 });
